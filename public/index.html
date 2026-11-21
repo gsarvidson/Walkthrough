@@ -343,13 +343,16 @@ function renderProperty() {
   const hasVisit = (p.visits || []).length > 0;
 
   const checkin = today
-    ? `<div class="here">${TICK}<div style="flex:1"><strong>You're here</strong><span>${esc(today.kind)} · checked in ${esc(fmtTime(today.checkedInAt))}</span></div><button class="linkbtn" type="button" onclick="undoCheckin(${today.id})">Undo</button></div>`
+    ? `<div class="here">${TICK}<div style="flex:1"><strong>You're here</strong><span>${esc(today.kind)} · checked in ${esc(fmtTime(today.checkedInAt))}${today.kind === 'Private viewing' ? ' (outside advertised times)' : ''}</span></div><button class="linkbtn" type="button" onclick="undoCheckin(${today.id})">Undo</button></div>`
     : `<button class="btn" type="button" id="checkin-btn" onclick="checkIn()">${PIN} I'm here – start viewing</button>
        ${nextOpenHome(p) ? '' : `<span class="muted" style="margin-top:-6px">No advertised times? That's fine – tap when you arrive for a private viewing.</span>`}`;
 
+  const pad = 30 * 60 * 1000;
   const ohs = (p.openHomes || []).map((o) => {
     const past = new Date(o.end || o.start) < now;
-    return `<div class="oh ${past ? 'past' : ''}"><span>${esc(fmtDay(o.start))}</span><span>${esc(fmtTime(o.start))}${o.end ? '–' + esc(fmtTime(o.end)) : ''}</span></div>`;
+    const s = new Date(o.start).getTime(), e = new Date(o.end || o.start).getTime();
+    const live = now >= s - pad && now <= e + pad;
+    return `<div class="oh ${past ? 'past' : ''}" ${live ? 'style="color:var(--accent);font-weight:600"' : ''}><span>${live ? 'Now · ' : ''}${esc(fmtDay(o.start))}</span><span>${esc(fmtTime(o.start))}${o.end ? '–' + esc(fmtTime(o.end)) : ''}</span></div>`;
   }).join('') || `<span class="muted">None advertised. You can still check in if you've arranged a viewing with the agent.</span>`;
 
   const visitsHtml = earlier.length
@@ -374,6 +377,7 @@ function renderProperty() {
         <h2 style="margin-top:8px">${esc(p.address || p.title)}</h2>
         <div class="price" style="margin-top:4px;font-size:14px">${esc(meta)}</div>
       </div>
+      <div class="panel"><span class="section-label">${ohLabel(p)} times</span>${ohs}</div>
       ${checkin}
 
       <div class="capture ${hasVisit ? '' : 'locked'}">
@@ -401,7 +405,6 @@ function renderProperty() {
       </div>
       </div>
 
-      <div class="panel"><span class="section-label">${ohLabel(p)} times</span>${ohs}</div>
       ${visitsHtml}
       ${agent}
       <div class="panel"><span class="section-label">Coming next</span><span class="muted">Heart ratings, questions to ask and feedback to the agent.</span></div>
