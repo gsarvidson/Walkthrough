@@ -199,7 +199,6 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
     </button>
   </div>
   <div class="tabs" role="group" aria-label="Filter">
-    <button class="tab" type="button" data-filter="all" aria-pressed="true" onclick="setFilter('all')">All</button>
     <button class="tab" type="button" data-filter="upcoming" aria-pressed="false" onclick="setFilter('upcoming')">Upcoming</button>
     <button class="tab" type="button" data-filter="viewed" aria-pressed="false" onclick="setFilter('viewed')">Viewed</button>
     <button class="tab" type="button" data-filter="sale" aria-pressed="false" onclick="setFilter('sale')">For sale</button>
@@ -396,7 +395,8 @@ async function syncNow(quiet) {
   finally { btn.classList.remove('spinning'); btn.disabled = false; if (document.getElementById('list-screen').classList.contains('active')) render(); }
 }
 function setFilter(f) {
-  state.filter = f;
+  state.filter = state.filter === f ? 'all' : f; // tap again to clear
+  f = state.filter;
   document.querySelectorAll('[data-filter]').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.filter === f)));
   render();
 }
