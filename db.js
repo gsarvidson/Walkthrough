@@ -67,6 +67,35 @@ CREATE TABLE IF NOT EXISTS notes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id           INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  rating_categories JSONB
+);
+
+CREATE TABLE IF NOT EXISTS ratings (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id BIGINT NOT NULL,
+  category   TEXT NOT NULL,
+  score      INTEGER NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, listing_id, category)
+);
+
+CREATE TABLE IF NOT EXISTS checklist (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id BIGINT NOT NULL,
+  item_key   TEXT NOT NULL,
+  kind       TEXT NOT NULL DEFAULT 'ask',
+  body       TEXT,
+  custom     BOOLEAN NOT NULL DEFAULT false,
+  done       BOOLEAN NOT NULL DEFAULT false,
+  answer     TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, listing_id, item_key)
+);
+
 CREATE TABLE IF NOT EXISTS photos (
   id         SERIAL PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -178,9 +207,15 @@ async function listProperties(userId) {
   const { rows } = await pool.query(
     'SELECT * FROM properties WHERE user_id = $1 AND on_watchlist ORDER BY first_synced_at DESC', [userId]);
   const counts = await countsFor(userId);
+  const ratings = await allRatings(userId);
+  const cats = await getCategories(userId);
   return rows.map((r) => {
     const p = rowToProperty(r);
     p.counts = counts[p.listingId] || { notes: 0, photos: 0, visits: 0, lastVisit: null };
+    const mine = ratings[p.listingId] || {};
+    const scores = cats.map((c) => mine[c]).filter((s) => s > 0);
+    p.ratings = mine;
+    p.average = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
     return p;
   });
 }
@@ -237,7 +272,72 @@ async function deletePhoto(userId, id) {
   await pool.query('DELETE FROM photos WHERE user_id = $1 AND id = $2', [userId, id]);
 }
 
+// ── rating categories (per member) ───────────────────────────────────────────
+const { DEFAULT_CATEGORIES } = require('./questions');
+
+async function getCategories(userId) {
+  const { rows } = await pool.query('SELECT rating_categories FROM user_settings WHERE user_id = $1', [userId]);
+  let c = rows[0] && rows[0].rating_categories;
+  if (typeof c === 'string') c = JSON.parse(c);
+  return Array.isArray(c) && c.length ? c : DEFAULT_CATEGORIES.slice();
+}
+async function setCategories(userId, cats) {
+  await pool.query(
+    `INSERT INTO user_settings (user_id, rating_categories) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET rating_categories = EXCLUDED.rating_categories`,
+    [userId, JSON.stringify(cats)]);
+}
+async function renameCategory(userId, from, to) {
+  await pool.query('DELETE FROM ratings WHERE user_id = $1 AND category = $2', [userId, to]);
+  await pool.query('UPDATE ratings SET category = $3 WHERE user_id = $1 AND category = $2', [userId, from, to]);
+}
+
+// ── ratings ──────────────────────────────────────────────────────────────────
+async function setRating(userId, listingId, category, score) {
+  if (!score) {
+    await pool.query('DELETE FROM ratings WHERE user_id = $1 AND listing_id = $2 AND category = $3', [userId, listingId, category]);
+    return;
+  }
+  await pool.query(
+    `INSERT INTO ratings (user_id, listing_id, category, score) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, listing_id, category) DO UPDATE SET score = EXCLUDED.score, updated_at = now()`,
+    [userId, listingId, category, score]);
+}
+async function getRatings(userId, listingId) {
+  const { rows } = await pool.query('SELECT category, score FROM ratings WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
+  const out = {};
+  for (const r of rows) out[r.category] = Number(r.score);
+  return out;
+}
+async function allRatings(userId) {
+  const { rows } = await pool.query('SELECT listing_id, category, score FROM ratings WHERE user_id = $1', [userId]);
+  const out = {};
+  for (const r of rows) (out[Number(r.listing_id)] = out[Number(r.listing_id)] || {})[r.category] = Number(r.score);
+  return out;
+}
+
+// ── checklist (questions & checks) ───────────────────────────────────────────
+async function getChecklist(userId, listingId) {
+  const { rows } = await pool.query(
+    'SELECT item_key, kind, body, custom, done, answer FROM checklist WHERE user_id = $1 AND listing_id = $2 ORDER BY id',
+    [userId, listingId]);
+  return rows.map((r) => ({ key: r.item_key, kind: r.kind, text: r.body, custom: r.custom, done: r.done, answer: r.answer }));
+}
+async function saveChecklistItem(userId, listingId, key, { kind, text, custom, done, answer }) {
+  await pool.query(
+    `INSERT INTO checklist (user_id, listing_id, item_key, kind, body, custom, done, answer)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (user_id, listing_id, item_key) DO UPDATE SET
+       done = EXCLUDED.done, answer = EXCLUDED.answer, updated_at = now()`,
+    [userId, listingId, key, kind || 'ask', text || null, !!custom, !!done, answer || null]);
+}
+async function deleteChecklistItem(userId, listingId, key) {
+  await pool.query('DELETE FROM checklist WHERE user_id = $1 AND listing_id = $2 AND item_key = $3 AND custom', [userId, listingId, key]);
+}
+
 module.exports = {
   init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
-  addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto
+  addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto,
+  getCategories, setCategories, renameCategory, setRating, getRatings, allRatings,
+  getChecklist, saveChecklistItem, deleteChecklistItem
 };

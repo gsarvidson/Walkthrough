@@ -4,6 +4,7 @@ const session = require('express-session');
 const { OAuth } = require('oauth');
 const db = require('./db');
 const { isProperty, mapListing } = require('./listing');
+const { buildChecklist } = require('./questions');
 
 // ── CONFIG ──────────────────────────────────────────────────────────────────
 const isSandbox = (process.env.TM_ENV || 'sandbox') !== 'production';
@@ -159,9 +160,75 @@ const listingParam = (req) => Number(req.params.listingId);
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: 'Something went wrong. Please try again.' }); });
 
 app.get('/api/properties/:listingId', requireAuth, wrap(async (req, res) => {
-  const p = await db.getProperty(req.session.userId, listingParam(req));
+  const uid = req.session.userId;
+  const p = await db.getProperty(uid, listingParam(req));
   if (!p) return res.status(404).json({ error: 'Property not found' });
-  res.json({ property: p, rooms: ROOMS });
+  p.ratings = await db.getRatings(uid, p.listingId);
+  p.checklist = buildChecklist(p.listingType, await db.getChecklist(uid, p.listingId));
+  res.json({ property: p, rooms: ROOMS, categories: await db.getCategories(uid) });
+}));
+
+// ── RATINGS ──────────────────────────────────────────────────────────────────
+const cleanCat = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+
+app.put('/api/properties/:listingId/ratings', requireAuth, wrap(async (req, res) => {
+  const uid = req.session.userId;
+  const p = await db.getProperty(uid, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  if (!p.visits.length) return res.status(403).json({ error: 'Tap “I’m here” first to start rating.' });
+  const category = cleanCat(req.body.category);
+  const score = Math.max(0, Math.min(5, Math.round(Number(req.body.score) || 0)));
+  if (!(await db.getCategories(uid)).includes(category)) return res.status(400).json({ error: 'Unknown category' });
+  await db.setRating(uid, p.listingId, category, score);
+  res.json({ success: true });
+}));
+
+// Replace the member's category list. Renames carry existing ratings across.
+app.put('/api/categories', requireAuth, wrap(async (req, res) => {
+  const uid = req.session.userId;
+  const seen = new Set();
+  const cats = (Array.isArray(req.body.categories) ? req.body.categories : [])
+    .map(cleanCat).filter((c) => c && !seen.has(c.toLowerCase()) && seen.add(c.toLowerCase())).slice(0, 20);
+  if (!cats.length) return res.status(400).json({ error: 'Keep at least one category' });
+  const renames = req.body.renames && typeof req.body.renames === 'object' ? req.body.renames : {};
+  for (const [from, to] of Object.entries(renames)) {
+    const f = cleanCat(from), t = cleanCat(to);
+    if (f && t && f !== t && cats.includes(t)) await db.renameCategory(uid, f, t);
+  }
+  await db.setCategories(uid, cats);
+  res.json({ categories: cats });
+}));
+
+// ── QUESTIONS & CHECKS ───────────────────────────────────────────────────────
+app.put('/api/properties/:listingId/checklist/:key', requireAuth, wrap(async (req, res) => {
+  const uid = req.session.userId;
+  const p = await db.getProperty(uid, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  const item = buildChecklist(p.listingType, await db.getChecklist(uid, p.listingId)).find((i) => i.key === req.params.key);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  await db.saveChecklistItem(uid, p.listingId, item.key, {
+    kind: item.kind, text: item.custom ? item.text : null, custom: item.custom,
+    done: req.body.done !== undefined ? !!req.body.done : item.done,
+    answer: req.body.answer !== undefined ? String(req.body.answer).slice(0, 2000) : item.answer
+  });
+  res.json({ success: true });
+}));
+
+app.post('/api/properties/:listingId/checklist', requireAuth, wrap(async (req, res) => {
+  const uid = req.session.userId;
+  const p = await db.getProperty(uid, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  const text = String(req.body.text || '').trim().slice(0, 300);
+  if (!text) return res.status(400).json({ error: 'Write something first' });
+  const kind = req.body.kind === 'check' ? 'check' : 'ask';
+  const key = 'u-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await db.saveChecklistItem(uid, p.listingId, key, { kind, text, custom: true, done: false, answer: '' });
+  res.json({ key });
+}));
+
+app.delete('/api/properties/:listingId/checklist/:key', requireAuth, wrap(async (req, res) => {
+  await db.deleteChecklistItem(req.session.userId, listingParam(req), req.params.key);
+  res.json({ success: true });
 }));
 
 // "I'm here" works any time. If it falls within an advertised open home (±30 min) it's tagged as such.
