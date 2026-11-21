@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: walkthrough
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: TM_CONSUMER_KEY
+        sync: false
+      - key: TM_CONSUMER_SECRET
+        sync: false
+      - key: TM_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: walkthrough-db
+          property: connectionString
+
+databases:
+  - name: walkthrough-db
+    plan: free
