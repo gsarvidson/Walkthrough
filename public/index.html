@@ -124,7 +124,7 @@ textarea.field { min-height: 72px; resize: vertical; line-height: 1.45; }
 .q-row { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.4; }
 .q-row input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex-shrink: 0; }
 .q-answer { margin-left: 32px; width: calc(100% - 32px); font-size: 14px; padding: 8px 10px; }
-.card.viewed { background: #F2FAF8; box-shadow: inset 0 0 0 2px var(--accent); }
+.card.viewed { background: #E6F4F1; }
 .thumb { position: relative; }
 .viewed-badge { position: absolute; left: 0; right: 0; bottom: 0; height: 24px; border-radius: 0 0 12px 12px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 4px; letter-spacing: 0.02em; }
 .score-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #FFE4E6; color: #9F1239; }
@@ -399,7 +399,7 @@ function cardHtml(p) {
   else { when = `No ${ohLabel(p).toLowerCase()} times listed`; cls = 'none'; }
   const thumb = p.photoUrl ? `style="background-image:url('${esc(p.photoUrl)}')"` : '';
   return `<a class="card ${viewed ? 'viewed' : ''}" href="#/p/${p.listingId}">
-    <div class="thumb" ${thumb}>${p.photoUrl ? '' : HOUSE}${viewed ? `<span class="viewed-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Viewed</span>` : ''}</div>
+    <div class="thumb" ${thumb}>${p.photoUrl ? '' : HOUSE}</div>
     <div class="card-body">
       <div class="row" style="gap:6px;flex-wrap:wrap">
         <span class="tag">${esc(p.listingType)}</span>
