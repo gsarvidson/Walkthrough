@@ -28,6 +28,13 @@ function attr(detail, ...names) {
   return null;
 }
 
+// Watchlist items only carry a small thumbnail URL (…/photoserver/thumb/123.jpg).
+// Swap the size folder for the full-size version.
+function upsizePhoto(url) {
+  if (!url) return null;
+  return String(url).replace(/\/photoserver\/(thumb|list|med|gv|tq|lv2|lv)\//i, '/photoserver/full/');
+}
+
 function mapAgent(detail) {
   const agency = detail && detail.Agency;
   if (!agency) return null;
@@ -47,7 +54,8 @@ function mapAgent(detail) {
 function mapListing(item, detail, webBase) {
   const d = detail || {};
   const path = item.CategoryPath || d.CategoryPath || '';
-  const photo = (d.Photos && d.Photos[0] && d.Photos[0].Value && (d.Photos[0].Value.Large || d.Photos[0].Value.Medium)) || item.PictureHref || null;
+  const pv = d.Photos && d.Photos[0] && d.Photos[0].Value;
+  const photo = (pv && (pv.FullSize || pv.Large || pv.Gallery || pv.Medium)) || upsizePhoto(item.PictureHref) || null;
   const openHomes = (d.OpenHomes || [])
     .map((o) => ({ start: parseTmDate(o.Start), end: parseTmDate(o.End) }))
     .filter((o) => o.start)
