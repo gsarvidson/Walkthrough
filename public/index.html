@@ -453,12 +453,16 @@ function renderProperty() {
   const p = state.current, now = Date.now();
   const meta = [p.price, count(p.bedrooms, 'bed'), count(p.bathrooms, 'bath')].filter(Boolean).join(' · ');
   const today = (p.visits || []).find((v) => dayKey(v.checkedInAt) === dayKey(new Date().toISOString()));
-  const earlier = (p.visits || []).filter((v) => v !== today);
+  const earlier = (p.visits || []).filter((v) => v !== today).slice(today ? 0 : 1);
   const hasVisit = (p.visits || []).length > 0;
   const tab = state.hubTab || 'capture';
 
+  const last = (p.visits || [])[0];
   const checkin = today
     ? `<div class="here">${TICK}<div style="flex:1"><strong>You're here</strong><span>${esc(today.kind)} · checked in ${esc(fmtTime(today.checkedInAt))}${today.kind === 'Private viewing' ? ' (outside advertised times)' : ''}</span></div><button class="linkbtn" type="button" onclick="undoCheckin(${today.id})">Undo</button></div>`
+    : last
+    ? `<div class="here">${TICK}<div style="flex:1"><strong>Viewed</strong><span>${esc(last.kind)} · ${esc(fmtDate(last.checkedInAt))} at ${esc(fmtTime(last.checkedInAt))}</span></div></div>
+       <button class="linkbtn" type="button" id="checkin-btn" style="align-self:flex-start;margin-top:-8px" onclick="checkIn()">Back for another viewing? Check in again</button>`
     : `<button class="btn" type="button" id="checkin-btn" onclick="checkIn()">${PIN} I'm here – start viewing</button>
        ${nextOpenHome(p) ? '' : `<span class="muted" style="margin-top:-6px">No advertised times? That's fine – tap when you arrive for a private viewing.</span>`}`;
 
