@@ -143,7 +143,7 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .cmp thead a { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.3; }
 .cmp-thumb { width: 72px; height: 54px; border-radius: 8px; background: #E5E7EB center/cover no-repeat; }
 .cmp td { font-weight: 600; }
-.cmp td.top { background: #FFE4E6; color: #9F1239; font-weight: 700; }
+.cmp td.best { background: #FFE4E6; color: #9F1239; font-weight: 700; }
 .cmp tr.overall th, .cmp tr.overall td { font-size: 16px; font-weight: 700; }
 .cmp tr.meta td { font-weight: 400; font-size: 12px; color: var(--body); }
 .cmp .dash { color: #9CA3AF; font-weight: 400; }
@@ -348,7 +348,7 @@ function renderCompare() {
   }
   const cats = state.categories;
   const best = (vals) => { const nums = vals.filter((v) => v > 0); return nums.length > 1 ? Math.max(...nums) : null; };
-  const cell = (v, top, txt) => `<td class="${v && v === top ? 'top' : ''}">${txt != null ? txt : (v ? v : '<span class="dash">–</span>')}</td>`;
+  const cell = (v, top, txt) => `<td class="${v && v === top ? 'best' : ''}">${txt != null ? txt : (v ? v : '<span class="dash">–</span>')}</td>`;
 
   const avgs = viewed.map((p) => p.average || 0), topAvg = best(avgs);
   const rows = cats.map((c) => {
@@ -387,7 +387,7 @@ async function syncNow(quiet) {
 }
 function setFilter(f) {
   state.filter = f;
-  document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.filter === f)));
+  document.querySelectorAll('[data-filter]').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.filter === f)));
   render();
 }
 function cardHtml(p) {
