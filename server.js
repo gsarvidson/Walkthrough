@@ -334,6 +334,11 @@ app.get('/api/photos/:id', requireAuth, wrap(async (req, res) => {
   res.set('Content-Type', ph.mime).set('Cache-Control', 'private, max-age=86400').send(ph.data);
 }));
 
+app.patch('/api/photos/:id', requireAuth, wrap(async (req, res) => {
+  await db.setPhotoRoom(req.session.userId, Number(req.params.id), cleanRoom(req.body && req.body.room));
+  res.json({ success: true });
+}));
+
 app.delete('/api/photos/:id', requireAuth, wrap(async (req, res) => {
   await db.deletePhoto(req.session.userId, Number(req.params.id));
   res.json({ success: true });

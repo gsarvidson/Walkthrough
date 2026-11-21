@@ -288,6 +288,9 @@ async function getPhoto(userId, id) {
   const { rows } = await pool.query('SELECT mime, data FROM photos WHERE user_id = $1 AND id = $2', [userId, id]);
   return rows[0] || null;
 }
+async function setPhotoRoom(userId, id, room) {
+  await pool.query('UPDATE photos SET room = $3 WHERE user_id = $1 AND id = $2', [userId, id, room]);
+}
 async function deletePhoto(userId, id) {
   await pool.query('DELETE FROM photos WHERE user_id = $1 AND id = $2', [userId, id]);
 }
@@ -403,7 +406,7 @@ async function feedbackStatuses(userId) {
 module.exports = {
   getFeedback, lastContact, saveFeedback, feedbackStatuses,
   init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
-  addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto,
+  addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto, setPhotoRoom,
   getCategories, setCategories, renameCategory, setRating, getRatings, allRatings,
   getChecklist, saveChecklistItem, deleteChecklistItem
 };
