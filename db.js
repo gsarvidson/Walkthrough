@@ -96,6 +96,24 @@ CREATE TABLE IF NOT EXISTS checklist (
   UNIQUE (user_id, listing_id, item_key)
 );
 
+CREATE TABLE IF NOT EXISTS feedback (
+  id              SERIAL PRIMARY KEY,
+  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id      BIGINT NOT NULL,
+  interest        TEXT,
+  include_ratings JSONB NOT NULL DEFAULT '[]',
+  comment         TEXT,
+  share_contact   BOOLEAN NOT NULL DEFAULT false,
+  contact_name    TEXT,
+  contact_email   TEXT,
+  contact_phone   TEXT,
+  status          TEXT NOT NULL DEFAULT 'draft',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_at         TIMESTAMPTZ,
+  UNIQUE (user_id, listing_id)
+);
+
 CREATE TABLE IF NOT EXISTS photos (
   id         SERIAL PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -209,8 +227,10 @@ async function listProperties(userId) {
   const counts = await countsFor(userId);
   const ratings = await allRatings(userId);
   const cats = await getCategories(userId);
+  const fb = await feedbackStatuses(userId);
   return rows.map((r) => {
     const p = rowToProperty(r);
+    p.feedback = fb[Number(r.listing_id)] || null;
     p.counts = counts[p.listingId] || { notes: 0, photos: 0, visits: 0, lastVisit: null };
     const mine = ratings[p.listingId] || {};
     const scores = cats.map((c) => mine[c]).filter((s) => s > 0);
@@ -335,7 +355,53 @@ async function deleteChecklistItem(userId, listingId, key) {
   await pool.query('DELETE FROM checklist WHERE user_id = $1 AND listing_id = $2 AND item_key = $3 AND custom', [userId, listingId, key]);
 }
 
+// ── feedback ─────────────────────────────────────────────────────────────────
+function rowToFeedback(r) {
+  if (!r) return null;
+  return {
+    interest: r.interest,
+    includeRatings: typeof r.include_ratings === 'string' ? JSON.parse(r.include_ratings) : (r.include_ratings || []),
+    comment: r.comment || '',
+    shareContact: r.share_contact,
+    contactName: r.contact_name || '',
+    contactEmail: r.contact_email || '',
+    contactPhone: r.contact_phone || '',
+    status: r.status,
+    updatedAt: iso(r.updated_at),
+    sentAt: iso(r.sent_at)
+  };
+}
+async function getFeedback(userId, listingId) {
+  const { rows } = await pool.query('SELECT * FROM feedback WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
+  return rowToFeedback(rows[0]);
+}
+async function lastContact(userId) {
+  const { rows } = await pool.query(
+    `SELECT contact_name, contact_email, contact_phone FROM feedback
+     WHERE user_id = $1 AND (contact_name IS NOT NULL OR contact_email IS NOT NULL) ORDER BY updated_at DESC LIMIT 1`, [userId]);
+  const r = rows[0];
+  return r ? { contactName: r.contact_name || '', contactEmail: r.contact_email || '', contactPhone: r.contact_phone || '' } : null;
+}
+async function saveFeedback(userId, listingId, f) {
+  await pool.query(
+    `INSERT INTO feedback (user_id, listing_id, interest, include_ratings, comment, share_contact, contact_name, contact_email, contact_phone)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (user_id, listing_id) DO UPDATE SET
+       interest = EXCLUDED.interest, include_ratings = EXCLUDED.include_ratings, comment = EXCLUDED.comment,
+       share_contact = EXCLUDED.share_contact, contact_name = EXCLUDED.contact_name,
+       contact_email = EXCLUDED.contact_email, contact_phone = EXCLUDED.contact_phone, updated_at = now()`,
+    [userId, listingId, f.interest, JSON.stringify(f.includeRatings), f.comment, f.shareContact,
+      f.contactName || null, f.contactEmail || null, f.contactPhone || null]);
+}
+async function feedbackStatuses(userId) {
+  const { rows } = await pool.query('SELECT listing_id, status FROM feedback WHERE user_id = $1', [userId]);
+  const out = {};
+  for (const r of rows) out[Number(r.listing_id)] = r.status;
+  return out;
+}
+
 module.exports = {
+  getFeedback, lastContact, saveFeedback, feedbackStatuses,
   init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
   addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto,
   getCategories, setCategories, renameCategory, setRating, getRatings, allRatings,

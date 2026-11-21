@@ -147,6 +147,11 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .cmp tr.overall th, .cmp tr.overall td { font-size: 16px; font-weight: 700; }
 .cmp tr.meta td { font-weight: 400; font-size: 12px; color: var(--body); }
 .cmp .dash { color: #9CA3AF; font-weight: 400; }
+.pill { min-height: 44px; border-radius: 12px; border: 1px solid #D1D5DB; background: var(--surface); font-size: 14px; font-weight: 500; color: var(--ink); }
+.pill.on { border: 2px solid var(--accent); background: var(--accent-soft); color: #0F5F58; font-weight: 700; }
+.preview { display: flex; flex-direction: column; gap: 8px; background: var(--ground); border-radius: 12px; padding: 14px; font-size: 14px; line-height: 1.45; }
+.status-pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #FEF3C7; color: #78350F; }
+.status-pill.sent { background: #D1FAE5; color: #065F46; }
 .signout { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 8px 0; }
 </style>
 </head>
@@ -217,6 +222,9 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 <!-- PROPERTY HUB -->
 <section id="property-screen" class="screen" aria-label="Property"></section>
 
+<!-- FEEDBACK -->
+<section id="feedback-screen" class="screen" aria-label="Feedback to agent"></section>
+
 <nav class="bottom-nav" id="bottom-nav" aria-label="Main" hidden>
   <a href="#" id="nav-list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>Properties</a>
   <a href="#/compare" id="nav-compare"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>Compare</a>
@@ -279,8 +287,10 @@ function show(id) {
 }
 function showError(msg) { const el = document.getElementById('login-error'); el.textContent = msg; el.classList.add('show'); }
 function route() {
-  const m = /^#\/p\/(\d+)/.exec(location.hash);
-  if (m) openProperty(Number(m[1]));
+  const f = /^#\/p\/(\d+)\/feedback/.exec(location.hash);
+  const m = /^#\/p\/(\d+)$/.exec(location.hash);
+  if (f) openFeedback(Number(f[1]));
+  else if (m) openProperty(Number(m[1]));
   else if (location.hash === '#/compare') { show('compare-screen'); renderCompare(); }
   else { show('list-screen'); render(); }
 }
@@ -542,10 +552,111 @@ function renderProperty() {
       </div>
       </div>`}
 
+      ${hasVisit ? (p.feedback
+        ? `<div class="panel"><div class="panel-head"><span class="section-label">Feedback to agent</span><span class="status-pill ${p.feedback.status === 'sent' ? 'sent' : ''}">${p.feedback.status === 'sent' ? 'Sent' : 'Saved · not sent yet'}</span></div>
+            <span class="muted">${esc(p.feedback.interest ? 'Interest: ' + p.feedback.interest + '. ' : '')}${esc(p.feedback.comment ? '“' + p.feedback.comment.slice(0, 120) + (p.feedback.comment.length > 120 ? '…' : '') + '”' : '')}</span>
+            ${p.feedback.status === 'sent' ? '' : `<a class="link" href="#/p/${p.listingId}/feedback">Edit feedback →</a>`}</div>`
+        : `<a class="btn btn-outline" href="#/p/${p.listingId}/feedback" style="text-decoration:none">Write feedback for the agent</a>`) : ''}
       ${visitsHtml}
       ${agent}
       <a class="link" href="${esc(p.listingUrl)}" target="_blank" rel="noopener">View listing on Trade Me →</a>
     </div>`;
+}
+
+// ── Feedback ───────────────────────────────────────────────────────────────
+const INTERESTS = ['Keen', 'Maybe', 'Not for me'];
+async function openFeedback(id) {
+  show('feedback-screen');
+  const el = document.getElementById('feedback-screen');
+  el.innerHTML = '<div class="p-body"><span class="muted">Loading…</span></div>';
+  try {
+    const d = await api('/api/properties/' + id);
+    state.current = d.property; state.categories = d.categories || state.categories;
+    const p = d.property, f = p.feedback, c = p.contactDefaults || {};
+    const rated = state.categories.filter((k) => p.ratings[k] > 0);
+    state.fb = f ? { ...f } : {
+      interest: null, includeRatings: rated, comment: '', shareContact: false,
+      contactName: c.contactName || '', contactEmail: c.contactEmail || '', contactPhone: c.contactPhone || ''
+    };
+    renderFeedback();
+  } catch (e) { el.innerHTML = `<div class="p-body"><a class="link" href="#">← Back</a><div class="empty">${esc(e.message)}</div></div>`; }
+}
+function renderFeedback() {
+  const p = state.current, f = state.fb;
+  const rated = state.categories.filter((k) => p.ratings[k] > 0);
+  const agentName = (p.agent && p.agent.name) || 'the agent';
+  const locked = !(p.visits || []).length;
+  document.getElementById('feedback-screen').innerHTML = `
+    <div class="top" style="align-items:center;justify-content:flex-start">
+      <a class="icon-btn" href="#/p/${p.listingId}" aria-label="Back to property"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
+      <div><h1 style="font-size:22px">Feedback to agent</h1><div class="sub">To ${esc(agentName)} · ${esc((p.address || p.title).split(',')[0])}</div></div>
+    </div>
+    <div class="p-body" style="padding-top:8px">
+      ${locked ? `<div class="lock-hint">Feedback is for homes you’ve viewed. Tap “I’m here” on the property first.</div>` : ''}
+      <div class="panel">
+        <span class="section-label">How interested are you?</span>
+        <div class="grid" role="group" aria-label="Interest level">
+          ${INTERESTS.map((i) => `<button type="button" class="pill ${f.interest === i ? 'on' : ''}" aria-pressed="${f.interest === i}" onclick="setInterest('${i}')">${i}</button>`).join('')}
+        </div>
+      </div>
+      <div class="panel">
+        <span class="section-label">Ratings to include</span>
+        ${rated.length ? rated.map((k, i) => `<label class="q-row" for="fr-${i}" style="justify-content:space-between;align-items:center;min-height:40px">
+            <span style="display:flex;gap:12px;align-items:center"><input type="checkbox" id="fr-${i}" ${f.includeRatings.includes(k) ? 'checked' : ''} onchange="toggleFbRating(${state.categories.indexOf(k)}, this.checked)" style="width:20px;height:20px;accent-color:var(--accent)">${esc(k)}</span>
+            <span style="font-weight:700;color:#BE123C">${p.ratings[k]}/5</span></label>`).join('')
+          : `<span class="muted">You haven’t rated this home yet. <a class="link" href="#/p/${p.listingId}" onclick="state.hubTab='ratings'">Add ratings</a></span>`}
+        <span class="muted" style="font-size:13px">Untick anything you’d rather keep private.</span>
+      </div>
+      <div class="panel">
+        <label class="section-label" for="fb-comment">Comments</label>
+        <textarea id="fb-comment" class="field" style="min-height:110px" maxlength="2000" placeholder="What did you like? What put you off?" oninput="state.fb.comment=this.value;updatePreview()">${esc(f.comment)}</textarea>
+        <span class="muted" style="font-size:13px">Be constructive – the agent may share this with the ${p.listingType === 'For rent' ? 'landlord' : 'owner'}.</span>
+      </div>
+      <div class="panel">
+        <label class="row" style="justify-content:space-between" for="fb-share">
+          <span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:15px;font-weight:600">Share my contact details</span><span class="muted" style="font-size:13px">So the agent can reply to you directly</span></span>
+          <input type="checkbox" id="fb-share" ${f.shareContact ? 'checked' : ''} onchange="state.fb.shareContact=this.checked;renderFeedback()" style="width:24px;height:24px;accent-color:var(--accent)">
+        </label>
+        ${f.shareContact ? `
+          <label class="sr" for="fb-name">Your name</label><input class="field" id="fb-name" placeholder="Your name" value="${esc(f.contactName)}" oninput="state.fb.contactName=this.value;updatePreview()">
+          <label class="sr" for="fb-email">Email</label><input class="field" id="fb-email" type="email" placeholder="Email" value="${esc(f.contactEmail)}" oninput="state.fb.contactEmail=this.value;updatePreview()">
+          <label class="sr" for="fb-phone">Phone</label><input class="field" id="fb-phone" type="tel" placeholder="Phone (optional)" value="${esc(f.contactPhone)}" oninput="state.fb.contactPhone=this.value;updatePreview()">` : ''}
+      </div>
+      <div class="panel">
+        <span class="section-label">What ${esc(agentName)} will see</span>
+        <div id="fb-preview" class="preview"></div>
+      </div>
+      <button class="btn" type="button" id="fb-save" ${locked ? 'disabled' : ''} onclick="saveFeedback()">Save feedback</button>
+      <span class="muted" style="text-align:center;font-size:13px">Sending to the agent is coming soon. Your feedback is saved and ready to go.</span>
+    </div>`;
+  updatePreview();
+}
+function updatePreview() {
+  const p = state.current, f = state.fb, el = document.getElementById('fb-preview');
+  if (!el) return;
+  const v = (p.visits || [])[0];
+  const ratings = f.includeRatings.filter((k) => p.ratings[k] > 0);
+  el.innerHTML = `
+    <strong style="font-size:15px">Feedback from your ${p.listingType === 'For rent' ? 'viewing' : 'open home'} at ${esc((p.address || p.title).split(',')[0])}</strong>
+    <span class="muted" style="font-size:13px">From ${esc(f.shareContact && f.contactName ? f.contactName : 'a Walkthrough user')}${v ? ` · viewed ${esc(fmtDate(v.checkedInAt))} at ${esc(fmtTime(v.checkedInAt))}` : ''}</span>
+    ${f.interest ? `<span>Interest: <strong>${esc(f.interest)}</strong></span>` : ''}
+    ${ratings.length ? `<span>${ratings.map((k) => `${esc(k)} <strong>${p.ratings[k]}/5</strong>`).join(' · ')}</span>` : ''}
+    ${f.comment.trim() ? `<span style="white-space:pre-wrap">“${esc(f.comment.trim())}”</span>` : ''}
+    ${f.shareContact ? `<span class="muted" style="font-size:13px">Contact: ${esc([f.contactEmail, f.contactPhone].filter(Boolean).join(' · ') || '–')}</span>` : `<span class="muted" style="font-size:13px">Your contact details won’t be shared.</span>`}`;
+}
+function setInterest(i) { state.fb.interest = state.fb.interest === i ? null : i; renderFeedback(); }
+function toggleFbRating(idx, on) {
+  const k = state.categories[idx];
+  state.fb.includeRatings = on ? [...new Set([...state.fb.includeRatings, k])] : state.fb.includeRatings.filter((x) => x !== k);
+  updatePreview();
+}
+async function saveFeedback() {
+  const btn = document.getElementById('fb-save'); btn.disabled = true;
+  try {
+    await api(`/api/properties/${state.current.listingId}/feedback`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state.fb) });
+    toast('Feedback saved');
+    location.hash = `#/p/${state.current.listingId}`;
+  } catch (e) { toast(e.message); btn.disabled = false; }
 }
 
 function setHubTab(t) { state.hubTab = t; state.editCats = false; renderProperty(); }

@@ -166,6 +166,8 @@ app.get('/api/properties/:listingId', requireAuth, wrap(async (req, res) => {
   if (!p) return res.status(404).json({ error: 'Property not found' });
   p.ratings = await db.getRatings(uid, p.listingId);
   p.checklist = buildChecklist(p.listingType, await db.getChecklist(uid, p.listingId));
+  p.feedback = await db.getFeedback(uid, p.listingId);
+  p.contactDefaults = p.feedback ? null : await db.lastContact(uid);
   res.json({ property: p, rooms: ROOMS, categories: await db.getCategories(uid) });
 }));
 
@@ -198,6 +200,35 @@ app.put('/api/categories', requireAuth, wrap(async (req, res) => {
   }
   await db.setCategories(uid, cats);
   res.json({ categories: cats });
+}));
+
+// ── FEEDBACK TO AGENT (saved now; emailing comes later) ──────────────────────
+const INTERESTS = ['Keen', 'Maybe', 'Not for me'];
+app.put('/api/properties/:listingId/feedback', requireAuth, wrap(async (req, res) => {
+  const uid = req.session.userId;
+  const p = await db.getProperty(uid, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  if (!p.visits.length) return res.status(403).json({ error: 'Tap “I’m here” first – feedback is for homes you’ve viewed.' });
+  const existing = await db.getFeedback(uid, p.listingId);
+  if (existing && existing.status === 'sent') return res.status(409).json({ error: 'This feedback has already been sent.' });
+
+  const b = req.body || {};
+  const cats = await db.getCategories(uid);
+  const f = {
+    interest: INTERESTS.includes(b.interest) ? b.interest : null,
+    includeRatings: (Array.isArray(b.includeRatings) ? b.includeRatings : []).filter((c) => cats.includes(c)),
+    comment: String(b.comment || '').trim().slice(0, 2000),
+    shareContact: !!b.shareContact,
+    contactName: String(b.contactName || '').trim().slice(0, 100),
+    contactEmail: String(b.contactEmail || '').trim().slice(0, 200),
+    contactPhone: String(b.contactPhone || '').trim().slice(0, 40)
+  };
+  if (!f.interest && !f.comment && !f.includeRatings.length) return res.status(400).json({ error: 'Add at least an interest level, a rating or a comment.' });
+  if (f.shareContact && !f.contactName) return res.status(400).json({ error: 'Add your name so the agent knows who it’s from.' });
+  if (f.shareContact && f.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.contactEmail)) return res.status(400).json({ error: 'That email address doesn’t look right.' });
+  if (f.shareContact && !f.contactEmail && !f.contactPhone) return res.status(400).json({ error: 'Add an email or phone number so the agent can reply.' });
+  await db.saveFeedback(uid, p.listingId, f);
+  res.json({ feedback: await db.getFeedback(uid, p.listingId) });
 }));
 
 // ── QUESTIONS & CHECKS ───────────────────────────────────────────────────────
