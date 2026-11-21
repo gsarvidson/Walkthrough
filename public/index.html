@@ -124,6 +124,11 @@ textarea.field { min-height: 72px; resize: vertical; line-height: 1.45; }
 .q-row { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.4; }
 .q-row input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex-shrink: 0; }
 .q-answer { margin-left: 32px; width: calc(100% - 32px); font-size: 14px; padding: 8px 10px; }
+.card.viewed { background: #F2FAF8; box-shadow: inset 0 0 0 2px var(--accent); }
+.thumb { position: relative; }
+.viewed-badge { position: absolute; left: 0; right: 0; bottom: 0; height: 24px; border-radius: 0 0 12px 12px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 4px; letter-spacing: 0.02em; }
+.score-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #FFE4E6; color: #9F1239; }
+.card.viewed .when strong { font-weight: 700; }
 .signout { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 8px 0; }
 </style>
 </head>
@@ -196,7 +201,8 @@ textarea.field { min-height: 72px; resize: vertical; line-height: 1.45; }
 <script>
 const TZ = 'Pacific/Auckland';
 const state = { properties: [], lastSync: null, filter: 'all', current: null, rooms: ['General'], categories: [], hubTab: 'capture', editCats: false, catDraft: [], viewerPhoto: null, synced: false };
-const HOUSE = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>';
+const HEART_SM = '<svg width="12" height="12" viewBox="0 0 24 24" fill="#E11D48" aria-hidden="true"><path d="M12 20.7l-1.4-1.3C5.4 14.7 2 11.6 2 7.8 2 4.7 4.4 2.3 7.5 2.3c1.7 0 3.4.8 4.5 2.1 1.1-1.3 2.8-2.1 4.5-2.1 3.1 0 5.5 2.4 5.5 5.5 0 3.8-3.4 6.9-8.6 11.6L12 20.7z"/></svg>';
+const HOUSE ='<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>';
 const PIN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
 const TICK = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>';
 const CAMERA = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>';
@@ -298,17 +304,21 @@ function setFilter(f) {
 function cardHtml(p) {
   const oh = nextOpenHome(p), c = p.counts || {};
   let when, cls = '';
-  if (c.lastVisit) when = `Viewed ${fmtDate(c.lastVisit)}${p.average ? ` · ♥ ${p.average.toFixed(1)}` : ''}${c.notes ? ` · ${c.notes} note${c.notes > 1 ? 's' : ''}` : ''}${c.photos ? ` · ${c.photos} photo${c.photos > 1 ? 's' : ''}` : ''}`;
+  const viewed = !!c.lastVisit;
+  if (viewed) when = `${fmtDate(c.lastVisit)}${c.notes ? ` · ${c.notes} note${c.notes > 1 ? 's' : ''}` : ''}${c.photos ? ` · ${c.photos} photo${c.photos > 1 ? 's' : ''}` : ''}`;
   else if (oh) when = `${ohLabel(p)} · ${fmtDay(oh.start)} · ${fmtTime(oh.start)}${oh.end ? '–' + fmtTime(oh.end) : ''}`;
   else { when = `No ${ohLabel(p).toLowerCase()} times listed`; cls = 'none'; }
   const thumb = p.photoUrl ? `style="background-image:url('${esc(p.photoUrl)}')"` : '';
-  return `<a class="card" href="#/p/${p.listingId}">
-    <div class="thumb" ${thumb}>${p.photoUrl ? '' : HOUSE}</div>
+  return `<a class="card ${viewed ? 'viewed' : ''}" href="#/p/${p.listingId}">
+    <div class="thumb" ${thumb}>${p.photoUrl ? '' : HOUSE}${viewed ? `<span class="viewed-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Viewed</span>` : ''}</div>
     <div class="card-body">
-      <span class="tag">${esc(p.listingType)}</span>
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <span class="tag">${esc(p.listingType)}</span>
+        ${viewed && p.average ? `<span class="score-pill" aria-label="Your score ${p.average.toFixed(1)} of 5">${HEART_SM}${p.average.toFixed(1)}</span>` : ''}
+      </div>
       <span class="addr">${esc(p.address || p.title)}</span>
       <span class="price">${esc(p.price || '')}</span>
-      <span class="when ${cls}">${esc(when)}</span>
+      <span class="when ${cls}">${viewed ? '<strong>Viewed</strong> ' : ''}${esc(when)}</span>
     </div>
   </a>`;
 }
