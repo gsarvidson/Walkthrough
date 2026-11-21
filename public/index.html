@@ -365,7 +365,18 @@ function renderProperty() {
       <div class="note-body">${esc(n.body)}</div></div>`).join('');
 
   const agent = p.agent && (p.agent.name || p.agent.agency)
-    ? `<div class="panel"><span class="section-label">Agent</span><span style="font-size:15px;font-weight:600">${esc(p.agent.name || '')}</span>${p.agent.agency ? `<span class="muted">${esc(p.agent.agency)}</span>` : ''}</div>` : '';
+    ? `<div class="panel"><span class="section-label">Agent</span>
+        <div class="row" style="gap:12px">
+          ${p.agent.photo ? `<div style="width:48px;height:48px;border-radius:24px;background:#E5E7EB center/cover no-repeat;background-image:url('${esc(p.agent.photo)}');flex-shrink:0"></div>` : ''}
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+            <span style="font-size:15px;font-weight:600">${esc(p.agent.name || '')}</span>
+            ${p.agent.agency ? `<span class="muted">${esc(p.agent.agency)}</span>` : ''}
+          </div>
+        </div>
+        ${p.agent.mobile ? `<a class="link" href="tel:${esc(String(p.agent.mobile).replace(/[^\d+]/g, ''))}">Call ${esc(p.agent.mobile)}</a>` : ''}
+        ${!p.agent.mobile && p.agent.office ? `<a class="link" href="tel:${esc(String(p.agent.office).replace(/[^\d+]/g, ''))}">Call ${esc(p.agent.office)}</a>` : ''}
+        ${p.agent.email ? `<a class="link" href="mailto:${esc(p.agent.email)}" style="word-break:break-all">${esc(p.agent.email)}</a>` : ''}
+      </div>` : '';
 
   document.getElementById('property-screen').innerHTML = `
     <div class="p-photo" style="${p.photoUrl ? `background-image:url('${esc(p.photoUrl)}')` : ''}">

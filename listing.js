@@ -35,8 +35,12 @@ function mapAgent(detail) {
   return {
     agency: agency.Name || null,
     name: a.FullName || null,
-    email: a.EmailAddress || a.Email || null,
-    phone: a.MobilePhoneNumber || a.OfficePhoneNumber || agency.PhoneNumber || null
+    position: a.Position || null,
+    email: a.EMail || a.EmailAddress || a.Email || null,
+    mobile: a.MobilePhoneNumber || null,
+    office: a.OfficePhoneNumber || agency.PhoneNumber || null,
+    phone: a.MobilePhoneNumber || a.OfficePhoneNumber || agency.PhoneNumber || null,
+    photo: a.Photo || null
   };
 }
 
