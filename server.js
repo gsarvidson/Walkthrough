@@ -51,6 +51,24 @@ function tmGet(req, path, params = {}) {
   });
 }
 
+// Contact details from the member's Trade Me profile, used to prefill feedback.
+function profileFrom(me) {
+  return {
+    contactName: [me.FirstName, me.LastName].filter(Boolean).join(' ') || me.Nickname || '',
+    contactEmail: me.Email || '',
+    contactPhone: me.MobilePhoneNumber || me.LandlinePhoneNumber || ''
+  };
+}
+async function getProfile(req) {
+  if (req.session.profile) return req.session.profile;
+  try {
+    req.session.profile = profileFrom(await tmGet(req, 'MyTradeMe/Summary'));
+    return req.session.profile;
+  } catch (e) {
+    return null;
+  }
+}
+
 function requireAuth(req, res, next) {
   if (!req.session.token || !req.session.userId) return res.status(401).json({ error: 'Not signed in' });
   next();
@@ -88,6 +106,7 @@ app.post('/auth/pin', (req, res) => {
       const userId = await db.upsertUser(me.MemberId, me.Nickname);
       req.session.userId = userId;
       req.session.nickname = me.Nickname || '';
+      req.session.profile = profileFrom(me);
       res.json({ success: true });
     } catch (e) {
       console.error('Member lookup failed:', e.message, e.detail || '');
@@ -167,7 +186,7 @@ app.get('/api/properties/:listingId', requireAuth, wrap(async (req, res) => {
   p.ratings = await db.getRatings(uid, p.listingId);
   p.checklist = buildChecklist(p.listingType, await db.getChecklist(uid, p.listingId));
   p.feedback = await db.getFeedback(uid, p.listingId);
-  p.contactDefaults = p.feedback ? null : await db.lastContact(uid);
+  p.contactDefaults = p.feedback ? null : ((await db.lastContact(uid)) || (await getProfile(req)));
   res.json({ property: p, rooms: ROOMS, categories: await db.getCategories(uid) });
 }));
 
