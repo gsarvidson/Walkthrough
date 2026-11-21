@@ -151,6 +151,74 @@ app.post('/api/sync', requireAuth, async (req, res) => {
   }
 });
 
+// ── PROPERTY HUB: visits, notes, photos ──────────────────────────────────────
+const ROOMS = ['General', 'Entrance', 'Lounge', 'Kitchen', 'Dining', 'Bedroom 1', 'Bedroom 2', 'Bedroom 3', 'Bedroom 4',
+  'Bathroom', 'Ensuite', 'Laundry', 'Garage', 'Outdoor', 'Street'];
+const cleanRoom = (r) => (ROOMS.includes(r) ? r : 'General');
+const listingParam = (req) => Number(req.params.listingId);
+const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: 'Something went wrong. Please try again.' }); });
+
+app.get('/api/properties/:listingId', requireAuth, wrap(async (req, res) => {
+  const p = await db.getProperty(req.session.userId, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  res.json({ property: p, rooms: ROOMS });
+}));
+
+// "I'm here" works any time. If it falls within an advertised open home (±30 min) it's tagged as such.
+app.post('/api/properties/:listingId/checkin', requireAuth, wrap(async (req, res) => {
+  const p = await db.getProperty(req.session.userId, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  const now = Date.now(), pad = 30 * 60 * 1000;
+  const inWindow = (p.openHomes || []).some((o) => {
+    const s = new Date(o.start).getTime(), e = new Date(o.end || o.start).getTime();
+    return now >= s - pad && now <= e + pad;
+  });
+  const kind = inWindow ? (p.listingType === 'For rent' ? 'Advertised viewing' : 'Open home') : 'Private viewing';
+  const id = await db.addVisit(req.session.userId, p.listingId, kind);
+  res.json({ id, kind });
+}));
+
+app.delete('/api/visits/:id', requireAuth, wrap(async (req, res) => {
+  await db.deleteVisit(req.session.userId, Number(req.params.id));
+  res.json({ success: true });
+}));
+
+app.post('/api/properties/:listingId/notes', requireAuth, wrap(async (req, res) => {
+  const body = String((req.body && req.body.body) || '').trim().slice(0, 4000);
+  if (!body) return res.status(400).json({ error: 'Note is empty' });
+  const p = await db.getProperty(req.session.userId, listingParam(req));
+  if (!p) return res.status(404).json({ error: 'Property not found' });
+  const id = await db.addNote(req.session.userId, p.listingId, cleanRoom(req.body.room), body);
+  res.json({ id });
+}));
+
+app.delete('/api/notes/:id', requireAuth, wrap(async (req, res) => {
+  await db.deleteNote(req.session.userId, Number(req.params.id));
+  res.json({ success: true });
+}));
+
+// Photos arrive already resized on the phone (JPEG, ~1600px), sent as the raw request body.
+app.post('/api/properties/:listingId/photos', requireAuth,
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '6mb' }),
+  wrap(async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'No photo received' });
+    const p = await db.getProperty(req.session.userId, listingParam(req));
+    if (!p) return res.status(404).json({ error: 'Property not found' });
+    const id = await db.addPhoto(req.session.userId, p.listingId, cleanRoom(req.query.room), req.headers['content-type'], req.body);
+    res.json({ id });
+  }));
+
+app.get('/api/photos/:id', requireAuth, wrap(async (req, res) => {
+  const ph = await db.getPhoto(req.session.userId, Number(req.params.id));
+  if (!ph) return res.status(404).end();
+  res.set('Content-Type', ph.mime).set('Cache-Control', 'private, max-age=86400').send(ph.data);
+}));
+
+app.delete('/api/photos/:id', requireAuth, wrap(async (req, res) => {
+  await db.deletePhoto(req.session.userId, Number(req.params.id));
+  res.json({ success: true });
+}));
+
 app.get('/healthz', (req, res) => res.send('ok'));
 app.use(express.static('public'));
 

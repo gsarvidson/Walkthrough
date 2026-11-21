@@ -1,9 +1,9 @@
 // Storage for Walkthrough.
 // With DATABASE_URL set (Render), data lives in Postgres.
-// Without it (local testing), data is kept in memory and lost on restart.
+// Without it (local testing), an in-memory Postgres (pg-mem) is used and data is lost on restart.
 
 const hasDb = !!process.env.DATABASE_URL;
-let pool = null;
+let pool;
 
 if (hasDb) {
   const { Pool } = require('pg');
@@ -11,6 +11,10 @@ if (hasDb) {
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false
   });
+} else {
+  const { newDb } = require('pg-mem');
+  const { Pool } = newDb().adapters.createPg();
+  pool = new Pool();
 }
 
 const SCHEMA = `
@@ -45,10 +49,36 @@ CREATE TABLE IF NOT EXISTS properties (
   last_synced_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, listing_id)
 );
+
+CREATE TABLE IF NOT EXISTS visits (
+  id            SERIAL PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id    BIGINT NOT NULL,
+  kind          TEXT NOT NULL,
+  checked_in_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id BIGINT NOT NULL,
+  room       TEXT NOT NULL DEFAULT 'General',
+  body       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS photos (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id BIGINT NOT NULL,
+  room       TEXT NOT NULL DEFAULT 'General',
+  mime       TEXT NOT NULL,
+  data       BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
-// ── in-memory fallback ───────────────────────────────────────────────────────
-const mem = { users: [], properties: [] };
+const iso = (d) => (d ? new Date(d).toISOString() : null);
 
 function rowToProperty(r) {
   return {
@@ -63,19 +93,18 @@ function rowToProperty(r) {
     bathrooms: r.bathrooms,
     photoUrl: r.photo_url,
     listingUrl: r.listing_url,
-    openHomes: r.open_homes || [],
-    agent: r.agent || null,
-    closesAt: r.closes_at ? new Date(r.closes_at).toISOString() : null,
-    firstSyncedAt: new Date(r.first_synced_at).toISOString()
+    openHomes: typeof r.open_homes === 'string' ? JSON.parse(r.open_homes) : (r.open_homes || []),
+    agent: typeof r.agent === 'string' ? JSON.parse(r.agent) : (r.agent || null),
+    closesAt: iso(r.closes_at),
+    firstSyncedAt: iso(r.first_synced_at)
   };
 }
 
 async function init() {
-  if (!hasDb) {
-    console.warn('No DATABASE_URL set: using in-memory storage (data is lost on restart).');
-    return;
+  if (!hasDb) console.warn('No DATABASE_URL set: using in-memory database (data is lost on restart).');
+  for (const stmt of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) {
+    await pool.query(stmt);
   }
-  await pool.query(SCHEMA);
 }
 
 function sessionStore(session) {
@@ -84,13 +113,8 @@ function sessionStore(session) {
   return new PgStore({ pool, createTableIfMissing: true });
 }
 
+// ── users ────────────────────────────────────────────────────────────────────
 async function upsertUser(memberId, nickname) {
-  if (!hasDb) {
-    let u = mem.users.find((x) => x.tm_member_id === Number(memberId));
-    if (!u) { u = { id: mem.users.length + 1, tm_member_id: Number(memberId), last_sync_at: null }; mem.users.push(u); }
-    u.nickname = nickname;
-    return u.id;
-  }
   const { rows } = await pool.query(
     `INSERT INTO users (tm_member_id, nickname) VALUES ($1, $2)
      ON CONFLICT (tm_member_id) DO UPDATE SET nickname = EXCLUDED.nickname, last_login_at = now()
@@ -100,76 +124,120 @@ async function upsertUser(memberId, nickname) {
   return rows[0].id;
 }
 
-async function saveSync(userId, props) {
-  const ids = props.map((p) => p.listingId);
-  if (!hasDb) {
-    const now = new Date().toISOString();
-    for (const p of props) {
-      let r = mem.properties.find((x) => x.user_id === userId && Number(x.listing_id) === p.listingId);
-      if (!r) { r = { user_id: userId, listing_id: p.listingId, first_synced_at: now }; mem.properties.push(r); }
-      Object.assign(r, {
-        title: p.title, address: p.address, suburb: p.suburb, region: p.region, price: p.price,
-        listing_type: p.listingType, bedrooms: p.bedrooms, bathrooms: p.bathrooms, photo_url: p.photoUrl,
-        listing_url: p.listingUrl, open_homes: p.openHomes, agent: p.agent, closes_at: p.closesAt,
-        on_watchlist: true, last_synced_at: now
-      });
-    }
-    mem.properties.filter((x) => x.user_id === userId && !ids.includes(Number(x.listing_id))).forEach((x) => { x.on_watchlist = false; });
-    mem.users.find((u) => u.id === userId).last_sync_at = now;
-    return;
-  }
+async function lastSync(userId) {
+  const { rows } = await pool.query('SELECT last_sync_at FROM users WHERE id = $1', [userId]);
+  return rows[0] ? iso(rows[0].last_sync_at) : null;
+}
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    for (const p of props) {
-      await client.query(
-        `INSERT INTO properties (user_id, listing_id, title, address, suburb, region, price, listing_type,
-           bedrooms, bathrooms, photo_url, listing_url, open_homes, agent, closes_at, on_watchlist, last_synced_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true,now())
-         ON CONFLICT (user_id, listing_id) DO UPDATE SET
-           title = EXCLUDED.title, address = EXCLUDED.address, suburb = EXCLUDED.suburb, region = EXCLUDED.region,
-           price = EXCLUDED.price, listing_type = EXCLUDED.listing_type, bedrooms = EXCLUDED.bedrooms,
-           bathrooms = EXCLUDED.bathrooms, photo_url = EXCLUDED.photo_url, listing_url = EXCLUDED.listing_url,
-           open_homes = EXCLUDED.open_homes, agent = EXCLUDED.agent, closes_at = EXCLUDED.closes_at,
-           on_watchlist = true, last_synced_at = now()`,
-        [userId, p.listingId, p.title, p.address, p.suburb, p.region, p.price, p.listingType,
-          p.bedrooms, p.bathrooms, p.photoUrl, p.listingUrl, JSON.stringify(p.openHomes),
-          p.agent ? JSON.stringify(p.agent) : null, p.closesAt]
-      );
-    }
-    await client.query(
-      `UPDATE properties SET on_watchlist = false WHERE user_id = $1 AND NOT (listing_id = ANY($2::bigint[]))`,
-      [userId, ids]
+// ── properties ───────────────────────────────────────────────────────────────
+async function saveSync(userId, props) {
+  for (const p of props) {
+    await pool.query(
+      `INSERT INTO properties (user_id, listing_id, title, address, suburb, region, price, listing_type,
+         bedrooms, bathrooms, photo_url, listing_url, open_homes, agent, closes_at, on_watchlist, last_synced_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true,now())
+       ON CONFLICT (user_id, listing_id) DO UPDATE SET
+         title = EXCLUDED.title, address = EXCLUDED.address, suburb = EXCLUDED.suburb, region = EXCLUDED.region,
+         price = EXCLUDED.price, listing_type = EXCLUDED.listing_type, bedrooms = EXCLUDED.bedrooms,
+         bathrooms = EXCLUDED.bathrooms, photo_url = EXCLUDED.photo_url, listing_url = EXCLUDED.listing_url,
+         open_homes = EXCLUDED.open_homes, agent = EXCLUDED.agent, closes_at = EXCLUDED.closes_at,
+         on_watchlist = true, last_synced_at = now()`,
+      [userId, p.listingId, p.title, p.address, p.suburb, p.region, p.price, p.listingType,
+        p.bedrooms, p.bathrooms, p.photoUrl, p.listingUrl, JSON.stringify(p.openHomes),
+        p.agent ? JSON.stringify(p.agent) : null, p.closesAt]
     );
-    await client.query('UPDATE users SET last_sync_at = now() WHERE id = $1', [userId]);
-    await client.query('COMMIT');
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
   }
+  // Anything no longer on the watchlist is hidden (but kept, with its notes and photos).
+  const { rows } = await pool.query('SELECT listing_id FROM properties WHERE user_id = $1 AND on_watchlist', [userId]);
+  const keep = new Set(props.map((p) => p.listingId));
+  for (const r of rows) {
+    if (!keep.has(Number(r.listing_id))) {
+      await pool.query('UPDATE properties SET on_watchlist = false WHERE user_id = $1 AND listing_id = $2', [userId, r.listing_id]);
+    }
+  }
+  await pool.query('UPDATE users SET last_sync_at = now() WHERE id = $1', [userId]);
+}
+
+async function countsFor(userId) {
+  const q = async (table, extra = '') => {
+    const { rows } = await pool.query(
+      `SELECT listing_id, COUNT(*) AS n ${extra} FROM ${table} WHERE user_id = $1 GROUP BY listing_id`, [userId]);
+    return rows;
+  };
+  const out = {};
+  const get = (id) => (out[id] = out[id] || { notes: 0, photos: 0, visits: 0, lastVisit: null });
+  for (const r of await q('notes')) get(Number(r.listing_id)).notes = Number(r.n);
+  for (const r of await q('photos')) get(Number(r.listing_id)).photos = Number(r.n);
+  for (const r of await q('visits', ', MAX(checked_in_at) AS last')) {
+    const c = get(Number(r.listing_id)); c.visits = Number(r.n); c.lastVisit = iso(r.last);
+  }
+  return out;
 }
 
 async function listProperties(userId) {
-  if (!hasDb) {
-    return mem.properties.filter((x) => x.user_id === userId && x.on_watchlist).map(rowToProperty);
-  }
   const { rows } = await pool.query(
-    'SELECT * FROM properties WHERE user_id = $1 AND on_watchlist ORDER BY first_synced_at DESC',
-    [userId]
-  );
-  return rows.map(rowToProperty);
+    'SELECT * FROM properties WHERE user_id = $1 AND on_watchlist ORDER BY first_synced_at DESC', [userId]);
+  const counts = await countsFor(userId);
+  return rows.map((r) => {
+    const p = rowToProperty(r);
+    p.counts = counts[p.listingId] || { notes: 0, photos: 0, visits: 0, lastVisit: null };
+    return p;
+  });
 }
 
-async function lastSync(userId) {
-  if (!hasDb) {
-    const u = mem.users.find((x) => x.id === userId);
-    return u ? u.last_sync_at : null;
-  }
-  const { rows } = await pool.query('SELECT last_sync_at FROM users WHERE id = $1', [userId]);
-  return rows[0] && rows[0].last_sync_at ? new Date(rows[0].last_sync_at).toISOString() : null;
+async function getProperty(userId, listingId) {
+  const { rows } = await pool.query('SELECT * FROM properties WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
+  if (!rows[0]) return null;
+  const p = rowToProperty(rows[0]);
+  p.visits = (await pool.query(
+    'SELECT id, kind, checked_in_at FROM visits WHERE user_id = $1 AND listing_id = $2 ORDER BY checked_in_at DESC',
+    [userId, listingId])).rows.map((v) => ({ id: v.id, kind: v.kind, checkedInAt: iso(v.checked_in_at) }));
+  p.notes = (await pool.query(
+    'SELECT id, room, body, created_at FROM notes WHERE user_id = $1 AND listing_id = $2 ORDER BY created_at DESC',
+    [userId, listingId])).rows.map((n) => ({ id: n.id, room: n.room, body: n.body, createdAt: iso(n.created_at) }));
+  p.photos = (await pool.query(
+    'SELECT id, room, created_at FROM photos WHERE user_id = $1 AND listing_id = $2 ORDER BY created_at DESC',
+    [userId, listingId])).rows.map((ph) => ({ id: ph.id, room: ph.room, createdAt: iso(ph.created_at) }));
+  return p;
 }
 
-module.exports = { init, sessionStore, upsertUser, saveSync, listProperties, lastSync };
+// ── visits ───────────────────────────────────────────────────────────────────
+async function addVisit(userId, listingId, kind) {
+  const { rows } = await pool.query(
+    'INSERT INTO visits (user_id, listing_id, kind) VALUES ($1, $2, $3) RETURNING id', [userId, listingId, kind]);
+  return rows[0].id;
+}
+async function deleteVisit(userId, id) {
+  await pool.query('DELETE FROM visits WHERE user_id = $1 AND id = $2', [userId, id]);
+}
+
+// ── notes ────────────────────────────────────────────────────────────────────
+async function addNote(userId, listingId, room, body) {
+  const { rows } = await pool.query(
+    'INSERT INTO notes (user_id, listing_id, room, body) VALUES ($1, $2, $3, $4) RETURNING id',
+    [userId, listingId, room, body]);
+  return rows[0].id;
+}
+async function deleteNote(userId, id) {
+  await pool.query('DELETE FROM notes WHERE user_id = $1 AND id = $2', [userId, id]);
+}
+
+// ── photos ───────────────────────────────────────────────────────────────────
+async function addPhoto(userId, listingId, room, mime, data) {
+  const { rows } = await pool.query(
+    'INSERT INTO photos (user_id, listing_id, room, mime, data) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [userId, listingId, room, mime, data]);
+  return rows[0].id;
+}
+async function getPhoto(userId, id) {
+  const { rows } = await pool.query('SELECT mime, data FROM photos WHERE user_id = $1 AND id = $2', [userId, id]);
+  return rows[0] || null;
+}
+async function deletePhoto(userId, id) {
+  await pool.query('DELETE FROM photos WHERE user_id = $1 AND id = $2', [userId, id]);
+}
+
+module.exports = {
+  init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
+  addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto
+};
