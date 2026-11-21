@@ -110,7 +110,8 @@ app.get('/api/properties', requireAuth, async (req, res) => {
   try {
     const properties = await db.listProperties(req.session.userId);
     const lastSync = await db.lastSync(req.session.userId);
-    res.json({ properties, lastSync });
+    const categories = await db.getCategories(req.session.userId);
+    res.json({ properties, lastSync, categories });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Could not load your properties.' });
