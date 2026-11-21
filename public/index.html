@@ -107,6 +107,9 @@ textarea.field { min-height: 72px; resize: vertical; line-height: 1.45; }
 .viewer-bar button { background: rgba(255,255,255,0.15); color: #fff; border: 0; height: 44px; padding: 0 16px; border-radius: 22px; font-weight: 600; }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 14px; z-index: 30; display: none; }
 .toast.show { display: block; }
+.capture { display: flex; flex-direction: column; gap: 14px; position: relative; }
+.capture.locked .panel { opacity: 0.45; filter: grayscale(1); }
+.lock-hint { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--body); background: var(--surface); border: 1.5px dashed #D1D5DB; border-radius: 14px; padding: 12px 14px; line-height: 1.4; }
 .signout { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 8px 0; }
 </style>
 </head>
@@ -337,6 +340,7 @@ function renderProperty() {
   const meta = [p.price, count(p.bedrooms, 'bed'), count(p.bathrooms, 'bath')].filter(Boolean).join(' · ');
   const today = (p.visits || []).find((v) => dayKey(v.checkedInAt) === dayKey(new Date().toISOString()));
   const earlier = (p.visits || []).filter((v) => v !== today);
+  const hasVisit = (p.visits || []).length > 0;
 
   const checkin = today
     ? `<div class="here">${TICK}<div style="flex:1"><strong>You're here</strong><span>${esc(today.kind)} · checked in ${esc(fmtTime(today.checkedInAt))}</span></div><button class="linkbtn" type="button" onclick="undoCheckin(${today.id})">Undo</button></div>`
@@ -372,6 +376,9 @@ function renderProperty() {
       </div>
       ${checkin}
 
+      <div class="capture ${hasVisit ? '' : 'locked'}">
+      ${hasVisit ? '' : `<div class="lock-hint"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Tap “I’m here” when you arrive to start adding photos and notes.</div>`}
+      <div ${hasVisit ? '' : 'inert aria-disabled="true"'} style="display:flex;flex-direction:column;gap:14px">
       <div class="panel">
         <div class="panel-head"><span class="section-label">Photos${p.photos.length ? ' · ' + p.photos.length : ''}</span></div>
         <div class="row"><label for="photo-room" class="sr">Room for next photo</label><select id="photo-room" class="field">${roomOptions(state.lastRoom || 'General')}</select></div>
@@ -390,6 +397,8 @@ function renderProperty() {
           <button class="small-btn" type="button" id="note-save" onclick="saveNote()">Save note</button>
         </div>
         ${notes}
+      </div>
+      </div>
       </div>
 
       <div class="panel"><span class="section-label">${ohLabel(p)} times</span>${ohs}</div>

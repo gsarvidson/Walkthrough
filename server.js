@@ -188,6 +188,7 @@ app.post('/api/properties/:listingId/notes', requireAuth, wrap(async (req, res) 
   if (!body) return res.status(400).json({ error: 'Note is empty' });
   const p = await db.getProperty(req.session.userId, listingParam(req));
   if (!p) return res.status(404).json({ error: 'Property not found' });
+  if (!p.visits.length) return res.status(403).json({ error: 'Tap “I’m here” first to start adding notes.' });
   const id = await db.addNote(req.session.userId, p.listingId, cleanRoom(req.body.room), body);
   res.json({ id });
 }));
@@ -204,6 +205,7 @@ app.post('/api/properties/:listingId/photos', requireAuth,
     if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'No photo received' });
     const p = await db.getProperty(req.session.userId, listingParam(req));
     if (!p) return res.status(404).json({ error: 'Property not found' });
+    if (!p.visits.length) return res.status(403).json({ error: 'Tap “I’m here” first to start adding photos.' });
     const id = await db.addPhoto(req.session.userId, p.listingId, cleanRoom(req.query.room), req.headers['content-type'], req.body);
     res.json({ id });
   }));
