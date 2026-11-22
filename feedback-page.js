@@ -16,7 +16,7 @@ const STYLE = `
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 h1,h2,.brand{font-family:'Space Grotesk',Inter,sans-serif}
-.wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.wrap{max-width:560px;margin:0 auto;padding:16px 12px 40px;display:flex;flex-direction:column;gap:14px}
 .logo{display:flex;align-items:center;gap:8px}
 .mark{width:28px;height:28px;border-radius:8px;background:#2F6663;display:flex;align-items:center;justify-content:center}
 .brand{font-weight:700;font-size:16px}

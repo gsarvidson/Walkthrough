@@ -51,18 +51,18 @@ h1, h2, .brand { font-family: 'Space Grotesk', Inter, sans-serif; }
 .error.show { display: block; }
 
 /* List */
-.top { padding: calc(28px + env(safe-area-inset-top)) 20px 8px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.top { padding: calc(24px + env(safe-area-inset-top)) 14px 8px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .top h1 { margin: 0; font-size: 28px; }
 .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .icon-btn { width: 44px; height: 44px; border-radius: 22px; border: 1px solid #D1D5DB; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--ink); flex-shrink: 0; }
 .icon-btn.spinning svg { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.tabs { padding: 8px 20px 12px; display: flex; gap: 8px; overflow-x: auto; }
+.tabs { padding: 8px 12px 12px; display: flex; gap: 8px; overflow-x: auto; }
 .tab { height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid #D1D5DB; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 500; white-space: nowrap; }
 .tab[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
-.list { padding: 0 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+.list { padding: 0 12px 24px; display: flex; flex-direction: column; gap: 12px; }
 .section-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.card { width: 100%; text-align: left; border: 0; background: var(--surface); border-radius: 16px; padding: 12px; display: flex; gap: 12px; align-items: center; color: var(--ink); text-decoration: none; }
+.card { width: 100%; text-align: left; border: 0; background: var(--surface); border-radius: 14px; padding: 10px; display: flex; gap: 12px; align-items: center; color: var(--ink); text-decoration: none; }
 .thumb { width: 84px; height: 84px; flex-shrink: 0; border-radius: 12px; background: #E5E7EB center/cover no-repeat; display: flex; align-items: center; justify-content: center; }
 .card-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .tag { align-self: flex-start; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: #0F5F58; }
@@ -75,9 +75,9 @@ h1, h2, .brand { font-family: 'Space Grotesk', Inter, sans-serif; }
 /* Property hub */
 .p-photo { height: 220px; background: #E5E7EB center/cover no-repeat; position: relative; }
 .p-back { position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 14px; background: var(--surface); border: 0; }
-.p-body { padding: 16px 20px 40px; display: flex; flex-direction: column; gap: 14px; }
+.p-body { padding: 14px 12px 40px; display: flex; flex-direction: column; gap: 14px; }
 .p-body h2 { margin: 0; font-size: 24px; line-height: 1.2; }
-.panel { background: var(--surface); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.panel { background: var(--surface); border-radius: 14px; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; }
 .oh { display: flex; justify-content: space-between; font-size: 15px; }
 .oh.past { color: var(--muted); }
@@ -141,9 +141,9 @@ textarea.field { min-height: 72px; resize: vertical; line-height: 1.45; }
 body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .cmp-wrap { overflow-x: auto; background: var(--surface); border-radius: 16px; -webkit-overflow-scrolling: touch; }
 .cmp { border-collapse: separate; border-spacing: 0; font-size: 14px; min-width: 100%; }
-.cmp th, .cmp td { padding: 10px 8px; border-bottom: 1px solid #EEF0F3; text-align: center; }
-.cmp tbody th { position: sticky; left: 0; background: var(--surface); text-align: left; font-weight: 500; color: #374151; min-width: 108px; max-width: 120px; z-index: 1; box-shadow: 1px 0 0 #EEF0F3; }
-.cmp thead th { vertical-align: top; min-width: 96px; max-width: 120px; }
+.cmp th, .cmp td { padding: 10px 6px; border-bottom: 1px solid #EEF0F3; text-align: center; }
+.cmp tbody th { position: sticky; left: 0; background: var(--surface); text-align: left; font-weight: 500; color: #374151; min-width: 92px; max-width: 110px; z-index: 1; box-shadow: 1px 0 0 #EEF0F3; }
+.cmp thead th { vertical-align: top; min-width: 88px; max-width: 110px; }
 .cmp thead th.corner { position: sticky; left: 0; background: var(--surface); z-index: 2; box-shadow: 1px 0 0 #EEF0F3; }
 .cmp thead a { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.3; }
 .cmp-thumb { width: 72px; height: 54px; border-radius: 8px; background: #E5E7EB center/cover no-repeat; }
@@ -215,7 +215,7 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
     <button class="tab" type="button" data-filter="rent" aria-pressed="false" onclick="setFilter('rent')">For rent</button>
   </div>
   <div class="list" id="list"></div>
-  <div style="padding:0 20px 32px;text-align:center"><button class="signout" type="button" onclick="signOut()">Sign out</button></div>
+  <div style="padding:0 12px 32px;text-align:center"><button class="signout" type="button" onclick="signOut()">Sign out</button></div>
 </section>
 
 <!-- COMPARE -->
@@ -225,7 +225,7 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
     <button class="tab" type="button" data-ctype="For sale" aria-pressed="true" onclick="setCompareType('For sale')">For sale</button>
     <button class="tab" type="button" data-ctype="For rent" aria-pressed="false" onclick="setCompareType('For rent')">For rent</button>
   </div>
-  <div id="compare-body" style="padding:0 20px 24px;display:flex;flex-direction:column;gap:12px"></div>
+  <div id="compare-body" style="padding:0 12px 24px;display:flex;flex-direction:column;gap:12px"></div>
 </section>
 
 <!-- PROPERTY HUB -->
