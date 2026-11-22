@@ -686,7 +686,7 @@ function feedbackSummary(p) {
 }
 function feedbackPanelHtml(p) {
   const f = p.feedback;
-  if (!f) return `<a class="btn btn-outline" href="#/p/${p.listingId}/feedback" style="text-decoration:none">Write feedback for the agent</a>`;
+  if (!f) return `<a class="btn btn-outline" href="#/p/${p.listingId}/feedback" style="text-decoration:none">Share feedback for the agent</a>`;
   const link = feedbackLink(p), a = f.activity || {};
   const snippet = esc([f.interest ? 'Interest: ' + f.interest + '.' : '', f.comment ? '“' + f.comment.slice(0, 100) + (f.comment.length > 100 ? '…' : '') + '”' : ''].filter(Boolean).join(' '));
   if (!link) {
