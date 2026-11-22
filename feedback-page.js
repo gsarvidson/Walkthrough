@@ -9,7 +9,7 @@ const fmtTime = fmt({ hour: '2-digit', minute: '2-digit', hour12: false });
 
 const HEART_ON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="#E11D48" aria-hidden="true"><path d="M12 20.7l-1.4-1.3C5.4 14.7 2 11.6 2 7.8 2 4.7 4.4 2.3 7.5 2.3c1.7 0 3.4.8 4.5 2.1 1.1-1.3 2.8-2.1 4.5-2.1 3.1 0 5.5 2.4 5.5 5.5 0 3.8-3.4 6.9-8.6 11.6L12 20.7z"/></svg>';
 const HEART_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.8" aria-hidden="true"><path d="M12 20.7l-1.4-1.3C5.4 14.7 2 11.6 2 7.8 2 4.7 4.4 2.3 7.5 2.3c1.7 0 3.4.8 4.5 2.1 1.1-1.3 2.8-2.1 4.5-2.1 3.1 0 5.5 2.4 5.5 5.5 0 3.8-3.4 6.9-8.6 11.6L12 20.7z"/></svg>';
-const LOGO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 14l2 2 4-4"/></svg>';
+const LOGO = '<svg width="24" height="24" viewBox="190 10 840 860" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#FFFFFF" stroke-width="44"><path d="M250 335 L605 55 L815 222"/><path d="M905 290 L960 335"/><path d="M337 295 V650 Q337 690 377 690 H470 Q510 690 510 650 V435 Q510 400 545 400 H660 Q695 400 695 435 V570"/><path d="M870 335 V650 Q870 690 830 690 H812"/></g><g stroke="#A8EBD3"><path d="M700 268 L775 352 L960 135" stroke-width="42"/><path d="M682 532 C565 545 515 585 585 632 C665 688 640 765 330 840" stroke-width="26"/><path d="M682 548 C610 562 605 590 685 618 C795 662 820 765 690 840" stroke-width="26"/></g></g><path d="M530 420 L605 458 L605 522 C570 530 548 545 530 575 Z" fill="#A8EBD3"/></svg>';
 
 const STYLE = `
 :root{--ink:#16181D;--muted:#5B6270;--body:#4B5260;--ground:#F3F4F6;--surface:#fff;--accent:#0F766E;--soft:#ECF5F3}
@@ -18,7 +18,7 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:Inter,system
 h1,h2,.brand{font-family:'Space Grotesk',Inter,sans-serif}
 .wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:14px}
 .logo{display:flex;align-items:center;gap:8px}
-.mark{width:28px;height:28px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center}
+.mark{width:28px;height:28px;border-radius:8px;background:#2F6663;display:flex;align-items:center;justify-content:center}
 .brand{font-weight:700;font-size:16px}
 .card{background:var(--surface);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
 .photo{height:180px;border-radius:16px;background:#E5E7EB center/cover no-repeat}
