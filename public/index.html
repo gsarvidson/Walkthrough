@@ -206,6 +206,7 @@ body.has-nav .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .hist small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
 .gpill { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; flex-shrink: 0; background: #F3F4F6; color: var(--body); }
 .gpill.ok { background: #D1FAE5; color: #065F46; }
+.gpill.paused { background: #FEF3C7; color: #78350F; }
 .gpill.no { background: #FEF2F2; color: #991B1B; }
 .point-banner { border-radius: 12px; background: var(--ink); color: #fff; padding: 12px; display: flex; gap: 12px; align-items: center; text-decoration: none; }
 .point-banner .plus1 { width: 44px; height: 44px; flex-shrink: 0; border-radius: 22px; background: #2DD4BF; color: var(--ink); display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; }
@@ -470,15 +471,28 @@ function renderGifts() {
         <span class="muted" style="font-size:12px">One point per property.</span>
       </div>`;
 
-  const pill = { confirmed: ['+1', 'ok'], pending: ['Pending', ''], declined: ['No point', 'no'] };
-  const status = (h) => h.state === 'confirmed' ? `Agent confirmed · ${fmtDay(h.confirmedAt)}` : h.state === 'declined' ? 'Agent didn’t confirm attendance' : 'Feedback shared · waiting for agent';
+  const pill = { confirmed: ['+1', 'ok'], pending: ['Pending', ''], paused: ['Paused', 'paused'], declined: ['No point', 'no'] };
+  const status = (h) => h.state === 'confirmed' ? `Agent confirmed · ${fmtDay(h.confirmedAt)}`
+    : h.state === 'declined' ? 'Agent didn’t confirm attendance'
+    : h.state === 'paused' ? 'Link turned off – the agent can’t confirm'
+    : 'Feedback shared · waiting for agent';
   const history = g.history.length
     ? `<div class="panel" style="padding:6px 12px"><span class="section-label" style="padding:8px 0 4px">Your points</span>
-        ${g.history.map((h) => `<a class="hist" href="#/p/${h.listingId}"><span style="min-width:0"><b>${esc(shortAddress({ address: h.address }))}</b><small>${esc(status(h))}</small></span><span class="gpill ${pill[h.state][1]}">${pill[h.state][0]}</span></a>`).join('')}
+        ${g.history.map((h) => `<div class="hist">
+          <a href="#/p/${h.listingId}" style="min-width:0;flex:1;text-decoration:none;color:inherit"><b>${esc(shortAddress({ address: h.address }))}</b><small>${esc(status(h))}</small></a>
+          ${h.state === 'paused' ? `<button class="linkbtn mini" type="button" onclick="resumeLink(${h.listingId})">Turn back on</button>` : ''}
+          <span class="gpill ${pill[h.state][1]}">${pill[h.state][0]}</span></div>`).join('')}
       </div>`
     : `<div class="empty">No points yet. Share feedback after your next viewing – when the agent confirms you were there, you earn a point.</div>`;
 
   el.innerHTML = progress + card + how + history;
+}
+async function resumeLink(listingId) {
+  try {
+    await api(`/api/properties/${listingId}/feedback/share`, { method: 'POST' });
+    toast('Link back on – the agent can confirm again');
+    state.giftData = await api('/api/gifts'); renderGifts();
+  } catch (e) { toast(e.message); }
 }
 async function copyGiftCode() {
   const code = state.giftData && state.giftData.gift.code;
@@ -851,7 +865,10 @@ async function shareFeedbackLink() {
   catch (e) { toast(e.message); }
 }
 async function unshareFeedbackLink() {
-  if (!confirm('Turn off the link? The agent won’t be able to see your feedback until you turn it back on.')) return;
+  const f = state.current.feedback || {};
+  const msg = 'Turn off the link? The agent won’t be able to see your feedback until you turn it back on.' +
+    (f.confirmed === true ? ' You’ll keep the point you’ve earned.' : ' They also won’t be able to confirm you attended, so you won’t earn a point for this home.');
+  if (!confirm(msg)) return;
   try { await api(`/api/properties/${state.current.listingId}/feedback/unshare`, { method: 'POST' }); await refreshProperty(); toast('Link turned off'); }
   catch (e) { toast(e.message); }
 }

@@ -484,7 +484,7 @@ async function feedbackStatuses(userId) {
 // One point per property: feedback is one row per property, so a confirmed row = one point.
 async function giftHistory(userId) {
   const { rows } = await pool.query(
-    `SELECT listing_id, confirmed, confirmed_at, status, shared_at FROM feedback
+    `SELECT listing_id, confirmed, confirmed_at, status, shared_at, share_active FROM feedback
      WHERE user_id = $1 AND (shared_at IS NOT NULL OR confirmed IS NOT NULL)`, [userId]);
   const props = await pool.query('SELECT listing_id, address, title FROM properties WHERE user_id = $1', [userId]);
   const names = {};
@@ -492,7 +492,8 @@ async function giftHistory(userId) {
   return rows.map((r) => ({
     listingId: Number(r.listing_id),
     address: names[Number(r.listing_id)] || '',
-    state: r.confirmed === true ? 'confirmed' : r.confirmed === false ? 'declined' : 'pending',
+    // Confirmed points are kept even if the link is later turned off.
+    state: r.confirmed === true ? 'confirmed' : r.confirmed === false ? 'declined' : r.share_active ? 'pending' : 'paused',
     confirmedAt: iso(r.confirmed_at),
     sharedAt: iso(r.shared_at)
   })).sort((a, b) => (b.confirmedAt || b.sharedAt || '').localeCompare(a.confirmedAt || a.sharedAt || ''));
