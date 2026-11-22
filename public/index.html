@@ -601,7 +601,7 @@ function renderFeedback() {
         </div>
       </div>
       <div class="panel">
-        <span class="section-label">Ratings to include</span>
+        ${rated.length ? `<div class="panel-head"><span class="section-label">Ratings to include</span>${selectAllBtn('includeRatings')}</div>` : `<span class="section-label">Ratings to include</span>`}
         ${rated.length ? rated.map((k, i) => `<label class="q-row" for="fr-${i}" style="justify-content:space-between;align-items:center;min-height:40px">
             <span style="display:flex;gap:12px;align-items:center"><input type="checkbox" id="fr-${i}" ${f.includeRatings.includes(k) ? 'checked' : ''} onchange="toggleFbRating(${state.categories.indexOf(k)}, this.checked)" style="width:20px;height:20px;accent-color:var(--accent)">${esc(k)}</span>
             <span style="font-weight:700;color:#BE123C">${p.ratings[k]}/5</span></label>`).join('')
@@ -609,14 +609,14 @@ function renderFeedback() {
         <span class="muted" style="font-size:13px">Untick anything you’d rather keep private.</span>
       </div>
       ${p.notes.length ? `<div class="panel">
-        <span class="section-label">Notes to share</span>
+        <div class="panel-head"><span class="section-label">Notes to share</span>${selectAllBtn('includeNotes')}</div>
         ${p.notes.map((n) => `<label class="q-row" for="fn-${n.id}" style="align-items:flex-start">
             <input type="checkbox" id="fn-${n.id}" ${f.includeNotes.includes(n.id) ? 'checked' : ''} onchange="toggleFbItem('includeNotes', ${n.id}, this.checked)">
             <span><b style="font-size:12px;color:#0F5F58">${esc(n.room)}</b><br>${esc(n.body.length > 160 ? n.body.slice(0, 160) + '…' : n.body)}</span></label>`).join('')}
         <span class="muted" style="font-size:13px">Notes are private unless you tick them.</span>
       </div>` : ''}
       ${p.photos.length ? `<div class="panel">
-        <span class="section-label">Photos to share</span>
+        <div class="panel-head"><span class="section-label">Photos to share</span>${selectAllBtn('includePhotos')}</div>
         <div class="grid">
           ${p.photos.map((ph) => `<label class="ph pick ${f.includePhotos.includes(ph.id) ? 'on' : ''}" style="background-image:url('/api/photos/${ph.id}')" for="fp-${ph.id}">
             <input type="checkbox" id="fp-${ph.id}" ${f.includePhotos.includes(ph.id) ? 'checked' : ''} onchange="toggleFbItem('includePhotos', ${ph.id}, this.checked); this.parentNode.classList.toggle('on', this.checked)" aria-label="Share photo – ${esc(ph.room)}">
@@ -747,15 +747,31 @@ async function sendFeedback(via) {
   }
 }
 
+// "Select all" / "Clear all" for ratings, notes and photos on the feedback screen.
+function shareable(key) {
+  const p = state.current;
+  if (key === 'includeRatings') return state.categories.filter((k) => p.ratings[k] > 0);
+  if (key === 'includeNotes') return p.notes.map((n) => n.id);
+  return p.photos.map((x) => x.id);
+}
+function selectAllBtn(key) {
+  const all = shareable(key), allOn = all.length && all.every((x) => state.fb[key].includes(x));
+  return `<button class="linkbtn mini" type="button" onclick="setAllShared('${key}', ${!allOn})">${allOn ? 'Clear all' : 'Select all'}</button>`;
+}
+function setAllShared(key, on) {
+  state.fb[key] = on ? shareable(key) : [];
+  const y = window.scrollY; renderFeedback(); window.scrollTo(0, y);
+}
+
 function toggleFbItem(key, id, on) {
   state.fb[key] = on ? [...new Set([...state.fb[key], id])] : state.fb[key].filter((x) => x !== id);
-  updatePreview();
+  const y = window.scrollY; renderFeedback(); window.scrollTo(0, y);
 }
 function setInterest(i) { state.fb.interest = state.fb.interest === i ? null : i; renderFeedback(); }
 function toggleFbRating(idx, on) {
   const k = state.categories[idx];
   state.fb.includeRatings = on ? [...new Set([...state.fb.includeRatings, k])] : state.fb.includeRatings.filter((x) => x !== k);
-  updatePreview();
+  const y = window.scrollY; renderFeedback(); window.scrollTo(0, y);
 }
 async function saveFeedback() {
   const btn = document.getElementById('fb-save'); btn.disabled = true;
