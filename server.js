@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const { OAuth } = require('oauth');
@@ -221,20 +222,26 @@ app.put('/api/categories', requireAuth, wrap(async (req, res) => {
   res.json({ categories: cats });
 }));
 
-// ── FEEDBACK TO AGENT (saved now; emailing comes later) ──────────────────────
+// ── FEEDBACK TO AGENT ────────────────────────────────────────────────────────
+// The visitor picks what to share. Sharing creates a private link the agent opens;
+// the email/text only carries a short summary plus that link.
 const INTERESTS = ['Keen', 'Maybe', 'Not for me'];
+const newToken = () => crypto.randomBytes(18).toString('base64url');
+const baseUrl = (req) => process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+
 app.put('/api/properties/:listingId/feedback', requireAuth, wrap(async (req, res) => {
   const uid = req.session.userId;
   const p = await db.getProperty(uid, listingParam(req));
   if (!p) return res.status(404).json({ error: 'Property not found' });
   if (!p.visits.length) return res.status(403).json({ error: 'Tap “I’m here” first – feedback is for homes you’ve viewed.' });
-  const existing = await db.getFeedback(uid, p.listingId);
-  if (existing && existing.status === 'sent') return res.status(409).json({ error: 'This feedback has already been sent.' });
 
   const b = req.body || {};
   const cats = await db.getCategories(uid);
+  const noteIds = new Set(p.notes.map((n) => n.id)), photoIds = new Set(p.photos.map((x) => x.id));
   const f = {
     interest: INTERESTS.includes(b.interest) ? b.interest : null,
+    includeNotes: (Array.isArray(b.includeNotes) ? b.includeNotes : []).map(Number).filter((id) => noteIds.has(id)),
+    includePhotos: (Array.isArray(b.includePhotos) ? b.includePhotos : []).map(Number).filter((id) => photoIds.has(id)),
     includeRatings: (Array.isArray(b.includeRatings) ? b.includeRatings : []).filter((c) => cats.includes(c)),
     comment: String(b.comment || '').trim().slice(0, 2000),
     shareContact: !!b.shareContact,
@@ -242,12 +249,78 @@ app.put('/api/properties/:listingId/feedback', requireAuth, wrap(async (req, res
     contactEmail: String(b.contactEmail || '').trim().slice(0, 200),
     contactPhone: String(b.contactPhone || '').trim().slice(0, 40)
   };
-  if (!f.interest && !f.comment && !f.includeRatings.length) return res.status(400).json({ error: 'Add at least an interest level, a rating or a comment.' });
+  if (!f.interest && !f.comment && !f.includeRatings.length && !f.includeNotes.length && !f.includePhotos.length) return res.status(400).json({ error: 'Add at least an interest level, a rating or a comment.' });
   if (f.shareContact && !f.contactName) return res.status(400).json({ error: 'Add your name so the agent knows who it’s from.' });
   if (f.shareContact && f.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.contactEmail)) return res.status(400).json({ error: 'That email address doesn’t look right.' });
   if (f.shareContact && !f.contactEmail && !f.contactPhone) return res.status(400).json({ error: 'Add an email or phone number so the agent can reply.' });
   await db.saveFeedback(uid, p.listingId, f);
   res.json({ feedback: await db.getFeedback(uid, p.listingId) });
+}));
+
+// Create (or switch back on) the private link for the agent.
+app.post('/api/properties/:listingId/feedback/share', requireAuth, wrap(async (req, res) => {
+  const uid = req.session.userId, lid = listingParam(req);
+  const token = await db.shareFeedback(uid, lid, newToken());
+  if (!token) return res.status(400).json({ error: 'Save your feedback first.' });
+  res.json({ url: `${baseUrl(req)}/f/${token}` });
+}));
+
+app.post('/api/properties/:listingId/feedback/unshare', requireAuth, wrap(async (req, res) => {
+  await db.unshareFeedback(req.session.userId, listingParam(req));
+  res.json({ success: true });
+}));
+
+// Record how the visitor sent the link (email, text, copy…) – for engagement data.
+app.post('/api/properties/:listingId/feedback/sent', requireAuth, wrap(async (req, res) => {
+  const via = ['email', 'share', 'copy'].includes(req.body && req.body.via) ? req.body.via : 'other';
+  await db.logFeedbackEvent(req.session.userId, listingParam(req), 'sent', via);
+  res.json({ success: true });
+}));
+
+// ── PUBLIC FEEDBACK PAGE (what the agent sees – no login) ────────────────────
+const { renderFeedbackPage, renderGonePage } = require('./feedback-page');
+
+function noIndex(res) {
+  res.set('X-Robots-Tag', 'noindex, nofollow').set('Referrer-Policy', 'no-referrer').set('Cache-Control', 'no-store');
+}
+
+app.get('/f/:token', wrap(async (req, res) => {
+  noIndex(res);
+  const f = await db.getFeedbackByToken(String(req.params.token));
+  if (!f) return res.status(404).send(renderGonePage());
+  const p = await db.getProperty(f.userId, f.listingId);
+  if (!p) return res.status(404).send(renderGonePage());
+  const isOwner = req.session.userId === f.userId;
+  if (!isOwner) await db.logFeedbackEventById(f.id, 'view', (req.get('user-agent') || '').slice(0, 200));
+  const ratings = await db.getRatings(f.userId, f.listingId);
+  res.send(renderFeedbackPage({ f, p, ratings, isOwner, token: req.params.token }));
+}));
+
+app.get('/f/:token/photo/:id', wrap(async (req, res) => {
+  noIndex(res);
+  const f = await db.getFeedbackByToken(String(req.params.token));
+  const id = Number(req.params.id);
+  if (!f || !f.includePhotos.includes(id)) return res.status(404).end();
+  const ph = await db.getPhoto(f.userId, id);
+  if (!ph) return res.status(404).end();
+  res.set('Content-Type', ph.mime).send(ph.data);
+}));
+
+app.post('/f/:token/confirm', wrap(async (req, res) => {
+  noIndex(res);
+  const f = await db.getFeedbackByToken(String(req.params.token));
+  if (!f) return res.status(404).json({ error: 'This feedback is no longer available.' });
+  if (req.session.userId === f.userId) return res.status(403).json({ error: 'Only the agent can confirm attendance.' });
+  const attended = !!(req.body && req.body.attended);
+  await db.confirmAttendance(f.id, attended);
+  await db.logFeedbackEventById(f.id, attended ? 'confirmed' : 'disputed');
+  res.json({ success: true, attended });
+}));
+
+app.post('/f/:token/reply', wrap(async (req, res) => {
+  const f = await db.getFeedbackByToken(String(req.params.token));
+  if (f && req.session.userId !== f.userId) await db.logFeedbackEventById(f.id, 'reply', req.body && req.body.via);
+  res.json({ success: true });
 }));
 
 // ── QUESTIONS & CHECKS ───────────────────────────────────────────────────────

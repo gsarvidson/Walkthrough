@@ -114,6 +114,22 @@ CREATE TABLE IF NOT EXISTS feedback (
   UNIQUE (user_id, listing_id)
 );
 
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS include_notes JSONB;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS include_photos JSONB;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS share_token TEXT;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS share_active BOOLEAN;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS shared_at TIMESTAMPTZ;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS confirmed BOOLEAN;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS feedback_events (
+  id          SERIAL PRIMARY KEY,
+  feedback_id INTEGER NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,
+  detail      TEXT,
+  at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS photos (
   id         SERIAL PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -369,14 +385,63 @@ function rowToFeedback(r) {
     contactName: r.contact_name || '',
     contactEmail: r.contact_email || '',
     contactPhone: r.contact_phone || '',
+    includeNotes: typeof r.include_notes === 'string' ? JSON.parse(r.include_notes) : (r.include_notes || []),
+    includePhotos: typeof r.include_photos === 'string' ? JSON.parse(r.include_photos) : (r.include_photos || []),
     status: r.status,
-    updatedAt: iso(r.updated_at),
-    sentAt: iso(r.sent_at)
+    shareToken: r.share_active ? r.share_token : null,
+    sharedAt: iso(r.shared_at),
+    confirmed: r.confirmed === null || r.confirmed === undefined ? null : r.confirmed,
+    confirmedAt: iso(r.confirmed_at),
+    updatedAt: iso(r.updated_at)
+  };
+}
+async function feedbackActivity(feedbackId) {
+  const { rows } = await pool.query('SELECT kind, detail, at FROM feedback_events WHERE feedback_id = $1 ORDER BY at', [feedbackId]);
+  const views = rows.filter((r) => r.kind === 'view');
+  const sends = rows.filter((r) => r.kind === 'sent');
+  return {
+    viewCount: views.length,
+    firstViewedAt: views.length ? iso(views[0].at) : null,
+    lastViewedAt: views.length ? iso(views[views.length - 1].at) : null,
+    sentVia: [...new Set(sends.map((s) => s.detail))],
+    lastSentAt: sends.length ? iso(sends[sends.length - 1].at) : null
   };
 }
 async function getFeedback(userId, listingId) {
   const { rows } = await pool.query('SELECT * FROM feedback WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
-  return rowToFeedback(rows[0]);
+  const f = rowToFeedback(rows[0]);
+  if (f) f.activity = await feedbackActivity(rows[0].id);
+  return f;
+}
+async function getFeedbackByToken(token) {
+  const { rows } = await pool.query('SELECT * FROM feedback WHERE share_token = $1 AND share_active', [token]);
+  if (!rows[0]) return null;
+  const f = rowToFeedback(rows[0]);
+  f.id = rows[0].id; f.userId = rows[0].user_id; f.listingId = Number(rows[0].listing_id);
+  return f;
+}
+async function shareFeedback(userId, listingId, newToken) {
+  const { rows } = await pool.query('SELECT share_token FROM feedback WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
+  if (!rows[0]) return null;
+  const token = rows[0].share_token || newToken;
+  await pool.query(
+    `UPDATE feedback SET share_token = $3, share_active = true, status = 'shared',
+       shared_at = COALESCE(shared_at, now()) WHERE user_id = $1 AND listing_id = $2`,
+    [userId, listingId, token]);
+  return token;
+}
+async function unshareFeedback(userId, listingId) {
+  await pool.query(`UPDATE feedback SET share_active = false, status = 'off' WHERE user_id = $1 AND listing_id = $2`, [userId, listingId]);
+}
+async function logFeedbackEvent(userId, listingId, kind, detail) {
+  const { rows } = await pool.query('SELECT id FROM feedback WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
+  if (rows[0]) await logFeedbackEventById(rows[0].id, kind, detail);
+}
+async function logFeedbackEventById(feedbackId, kind, detail) {
+  await pool.query('INSERT INTO feedback_events (feedback_id, kind, detail) VALUES ($1, $2, $3)', [feedbackId, kind, detail || null]);
+}
+async function confirmAttendance(feedbackId, attended) {
+  await pool.query('UPDATE feedback SET confirmed = $2, confirmed_at = now() WHERE id = $1', [feedbackId, attended]);
 }
 async function lastContact(userId) {
   const { rows } = await pool.query(
@@ -387,14 +452,16 @@ async function lastContact(userId) {
 }
 async function saveFeedback(userId, listingId, f) {
   await pool.query(
-    `INSERT INTO feedback (user_id, listing_id, interest, include_ratings, comment, share_contact, contact_name, contact_email, contact_phone)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO feedback (user_id, listing_id, interest, include_ratings, comment, share_contact, contact_name, contact_email, contact_phone, include_notes, include_photos)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (user_id, listing_id) DO UPDATE SET
        interest = EXCLUDED.interest, include_ratings = EXCLUDED.include_ratings, comment = EXCLUDED.comment,
        share_contact = EXCLUDED.share_contact, contact_name = EXCLUDED.contact_name,
-       contact_email = EXCLUDED.contact_email, contact_phone = EXCLUDED.contact_phone, updated_at = now()`,
+       contact_email = EXCLUDED.contact_email, contact_phone = EXCLUDED.contact_phone,
+       include_notes = EXCLUDED.include_notes, include_photos = EXCLUDED.include_photos, updated_at = now()`,
     [userId, listingId, f.interest, JSON.stringify(f.includeRatings), f.comment, f.shareContact,
-      f.contactName || null, f.contactEmail || null, f.contactPhone || null]);
+      f.contactName || null, f.contactEmail || null, f.contactPhone || null,
+      JSON.stringify(f.includeNotes || []), JSON.stringify(f.includePhotos || [])]);
 }
 async function feedbackStatuses(userId) {
   const { rows } = await pool.query('SELECT listing_id, status FROM feedback WHERE user_id = $1', [userId]);
@@ -405,6 +472,7 @@ async function feedbackStatuses(userId) {
 
 module.exports = {
   getFeedback, lastContact, saveFeedback, feedbackStatuses,
+  getFeedbackByToken, shareFeedback, unshareFeedback, logFeedbackEvent, logFeedbackEventById, confirmAttendance, feedbackActivity,
   init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
   addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto, setPhotoRoom,
   getCategories, setCategories, renameCategory, setRating, getRatings, allRatings,
