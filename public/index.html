@@ -426,7 +426,7 @@ function cardHtml(p) {
   return `<a class="card ${viewed ? 'viewed' : ''}" href="#/p/${p.listingId}">
     <div class="thumb" ${thumb}>${p.photoUrl ? '' : HOUSE}</div>
     <div class="card-body">
-      <div class="row" style="gap:6px;flex-wrap:wrap">
+      <div class="row" style="gap:6px;justify-content:space-between">
         <span class="tag">${esc(p.listingType)}</span>
         ${viewed && p.average ? `<span class="score-pill" aria-label="Your score ${p.average.toFixed(1)} of 5">${HEART_SM}${p.average.toFixed(1)}</span>` : ''}
       </div>
