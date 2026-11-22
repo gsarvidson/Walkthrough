@@ -85,7 +85,7 @@ h1, h2, .brand { font-family: 'Space Grotesk', Inter, sans-serif; }
 .here { display: flex; align-items: center; gap: 12px; background: var(--accent-soft); border-radius: 14px; padding: 14px; }
 .here strong { display: block; font-size: 15px; color: #0F5F58; }
 .here span { font-size: 13px; color: var(--body); }
-.linkbtn { background: none; border: 0; color: var(--accent); font-weight: 600; font-size: 14px; padding: 8px 0; min-height: 36px; }
+.linkbtn { background: none; border: 0; color: var(--accent); font-weight: 600; font-size: 14px; padding: 8px 0; min-height: 36px; display: inline-flex; align-items: center; font-family: inherit; }
 .link { color: var(--accent); font-weight: 600; font-size: 15px; text-decoration: none; }
 .note { border-top: 1px solid #EEF0F3; padding-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .note-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
@@ -162,6 +162,12 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .ph.pick { cursor: pointer; opacity: 0.55; outline: 3px solid transparent; outline-offset: -3px; }
 .ph.pick.on { opacity: 1; outline-color: var(--accent); }
 .ph.pick input { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.link-switch { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 4px 0 10px; border-radius: 18px; border: 0; background: #F3F4F6; color: var(--body); font-size: 12px; font-weight: 700; }
+.link-switch i { width: 36px; height: 22px; border-radius: 11px; background: #D1D5DB; position: relative; transition: background 0.15s; }
+.link-switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: left 0.15s; }
+.link-switch.on { background: #D1FAE5; color: #065F46; }
+.link-switch.on i { background: var(--accent); }
+.link-switch.on i::after { left: 17px; }
 .status-pill.sent { background: #D1FAE5; color: #065F46; }
 .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .linkbtn.mini { padding: 0; min-height: 28px; font-size: 13px; }
@@ -854,7 +860,7 @@ function feedbackPanelHtml(p) {
   const snippet = esc([f.interest ? 'Interest: ' + f.interest + '.' : '', f.comment ? '“' + f.comment.slice(0, 100) + (f.comment.length > 100 ? '…' : '') + '”' : ''].filter(Boolean).join(' '));
   if (!link) {
     return `<div class="panel">
-      <div class="panel-head"><span class="section-label">Feedback to agent</span><span class="status-pill">${f.status === 'off' ? 'Link off' : 'Not shared yet'}</span></div>
+      <div class="panel-head"><span class="section-label">Feedback to agent</span>${linkToggle(false, f.status === 'off' ? 'Link off' : 'No link yet')}</div>
       ${snippet ? `<span class="muted">${snippet}</span>` : ''}
       <button class="btn" type="button" onclick="shareFeedbackLink()">${f.status === 'off' ? 'Turn link back on' : 'Create link for the agent'}</button>
       <a class="link" href="#/p/${p.listingId}/feedback">Edit feedback</a>
@@ -872,7 +878,7 @@ function feedbackPanelHtml(p) {
         <span style="color:#5EEAD4;font-size:14px;font-weight:600">View ›</span></a>`
     : f.confirmed === false ? `<span class="act">Agent said you didn’t attend</span>` : '';
   return `<div class="panel">
-    <div class="panel-head"><span class="section-label">Feedback to agent</span><span class="status-pill sent">Link active</span></div>
+    <div class="panel-head"><span class="section-label">Feedback to agent</span>${linkToggle(true, 'Link active')}</div>
     ${opened}${confirmed}
     ${snippet ? `<span class="muted">${snippet}</span>` : ''}
     <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
@@ -883,10 +889,14 @@ function feedbackPanelHtml(p) {
       <button class="linkbtn" type="button" onclick="sendFeedback('copy')">Copy link</button>
       <a class="linkbtn" style="text-decoration:none" href="${esc(link)}" target="_blank" rel="noopener">Preview</a>
       <a class="linkbtn" style="text-decoration:none" href="#/p/${p.listingId}/feedback">Edit</a>
-      <button class="linkbtn" type="button" style="color:var(--muted)" onclick="unshareFeedbackLink()">Turn off link</button>
     </div>
     ${agentEmail ? '' : `<span class="muted" style="font-size:13px">Trade Me didn’t give us the agent’s email, so you’ll need to add it – or text the link instead.</span>`}
   </div>`;
+}
+// Top-right switch on the feedback panel: turns the agent's link on or off.
+function linkToggle(on, label) {
+  return `<button type="button" class="link-switch ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="Agent link ${on ? 'on' : 'off'}"
+    onclick="${on ? 'unshareFeedbackLink()' : 'shareFeedbackLink()'}"><span>${esc(label)}</span><i aria-hidden="true"></i></button>`;
 }
 async function shareFeedbackLink() {
   try { await api(`/api/properties/${state.current.listingId}/feedback/share`, { method: 'POST' }); await refreshProperty(); toast('Link ready – send it to the agent'); }
