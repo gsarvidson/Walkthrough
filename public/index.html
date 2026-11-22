@@ -407,6 +407,11 @@ function setFilter(f) {
   document.querySelectorAll('[data-filter]').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.filter === f)));
   render();
 }
+// "12 Kauri Street, Grey Lynn, Auckland City, Auckland" → "12 Kauri Street, Grey Lynn"
+function shortAddress(p) {
+  if (!p.address) return p.title || '';
+  return p.address.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2).join(', ');
+}
 function cardHtml(p) {
   const oh = nextOpenHome(p), c = p.counts || {};
   let when, cls = '';
@@ -422,7 +427,7 @@ function cardHtml(p) {
         <span class="tag">${esc(p.listingType)}</span>
         ${viewed && p.average ? `<span class="score-pill" aria-label="Your score ${p.average.toFixed(1)} of 5">${HEART_SM}${p.average.toFixed(1)}</span>` : ''}
       </div>
-      <span class="addr">${esc(p.address || p.title)}</span>
+      <span class="addr">${esc(shortAddress(p))}</span>
       <span class="price">${esc(p.price || '')}</span>
       <span class="when ${cls}">${viewed ? '<strong>Viewed</strong> ' : ''}${esc(when)}</span>
     </div>
