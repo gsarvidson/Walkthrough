@@ -177,6 +177,8 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .room-sheet { width: 100%; max-width: 520px; background: var(--surface); border-radius: 18px 18px 0 0; padding: 16px 14px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .room-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .room-grid .chip { min-height: 44px; }
+.next-oh { font-size: 14px; color: var(--body); padding: 0 2px; }
+.next-oh b { color: var(--accent); font-weight: 600; }
 body.has-nav .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .nav-icon { position: relative; display: inline-flex; }
 .nav-badge { position: absolute; top: -6px; left: 16px; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 5px; border-radius: 9px; white-space: nowrap; }
@@ -666,6 +668,12 @@ function renderProperty() {
     return `<div class="oh ${past ? 'past' : ''}" ${live ? 'style="color:var(--accent);font-weight:600"' : ''}><span>${live ? 'Now · ' : ''}${esc(fmtDay(o.start))}</span><span>${esc(fmtTime(o.start))}${o.end ? '–' + esc(fmtTime(o.end)) : ''}</span></div>`;
   }).join('') || `<span class="muted">None advertised. You can still check in if you've arranged a viewing with the agent.</span>`;
 
+  // Times box: full before check-in, hidden once you're here today, one line for a follow-up visit.
+  const nextOh = nextOpenHome(p);
+  const timesHtml = today ? ''
+    : last ? (nextOh ? `<div class="next-oh">Next ${ohLabel(p).toLowerCase()} · <b>${esc(fmtDay(nextOh.start))} · ${esc(fmtTime(nextOh.start))}${nextOh.end ? '–' + esc(fmtTime(nextOh.end)) : ''}</b></div>` : '')
+    : `<div class="panel"><span class="section-label">${ohLabel(p)} times</span>${ohs}</div>`;
+
   const visitsHtml = earlier.length
     ? `<div class="panel"><span class="section-label">Your visits</span>${earlier.map((v) => `<div class="oh"><span>${esc(fmtDate(v.checkedInAt))} · ${esc(fmtTime(v.checkedInAt))}</span><span class="muted">${esc(v.kind)}</span></div>`).join('')}</div>` : '';
 
@@ -697,7 +705,7 @@ function renderProperty() {
         <h2 style="margin-top:8px">${esc(p.address || p.title)}</h2>
         <div class="price" style="margin-top:4px;font-size:14px">${esc(meta)}</div>
       </div>
-      <div class="panel"><span class="section-label">${ohLabel(p)} times</span>${ohs}</div>
+      ${timesHtml}
       ${checkin}
 
       <div class="seg" role="tablist" aria-label="Viewing tools">
