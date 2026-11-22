@@ -672,7 +672,10 @@ function renderProperty() {
     </div>
     <div class="p-body">
       <div>
-        <span class="tag">${esc(p.listingType)}</span>
+        <div class="row" style="justify-content:space-between">
+          <span class="tag">${esc(p.listingType)}</span>
+          <a class="link" style="font-size:13px" href="${esc(p.listingUrl)}" target="_blank" rel="noopener">View on Trade Me ↗</a>
+        </div>
         <h2 style="margin-top:8px">${esc(p.address || p.title)}</h2>
         <div class="price" style="margin-top:4px;font-size:14px">${esc(meta)}</div>
       </div>
@@ -695,7 +698,6 @@ function renderProperty() {
       ${hasVisit ? feedbackPanelHtml(p) : ''}
       ${visitsHtml}
       ${agent}
-      <a class="link" href="${esc(p.listingUrl)}" target="_blank" rel="noopener">View listing on Trade Me →</a>
     </div>`;
 }
 
