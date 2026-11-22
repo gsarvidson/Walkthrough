@@ -162,6 +162,16 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .ph.pick.on { opacity: 1; outline-color: var(--accent); }
 .ph.pick input { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .status-pill.sent { background: #D1FAE5; color: #065F46; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.chip { flex-shrink: 0; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #D1D5DB; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.chip span { color: var(--muted); font-weight: 400; margin-left: 2px; }
+.chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.chip.on span { color: #D1D5DB; }
+.chip.add { border-style: dashed; color: var(--accent); font-weight: 600; }
+.room-sheet-bg { position: fixed; inset: 0; z-index: 25; background: rgba(22,24,29,0.45); display: flex; align-items: flex-end; justify-content: center; }
+.room-sheet { width: 100%; max-width: 520px; background: var(--surface); border-radius: 18px 18px 0 0; padding: 16px 14px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
+.room-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.room-grid .chip { min-height: 44px; }
 .signout { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 8px 0; }
 </style>
 </head>
@@ -462,7 +472,7 @@ async function openProperty(id) {
   show('property-screen');
   try {
     const d = await api('/api/properties/' + id);
-    if (!state.current || state.current.listingId !== id) { state.hubTab = 'capture'; state.editCats = false; }
+    if (!state.current || state.current.listingId !== id) { state.hubTab = 'capture'; state.editCats = false; state.photoRoom = 'All'; }
     state.current = d.property; state.rooms = d.rooms || state.rooms; state.categories = d.categories || state.categories;
     renderProperty();
   } catch (e) { el.innerHTML = `<div class="p-body"><a class="link" href="#">← Back</a><div class="empty">${esc(e.message)}</div></div>`; }
@@ -502,7 +512,7 @@ function renderProperty() {
   const visitsHtml = earlier.length
     ? `<div class="panel"><span class="section-label">Your visits</span>${earlier.map((v) => `<div class="oh"><span>${esc(fmtDate(v.checkedInAt))} · ${esc(fmtTime(v.checkedInAt))}</span><span class="muted">${esc(v.kind)}</span></div>`).join('')}</div>` : '';
 
-  const photos = (p.photos || []).map((ph) => `<button class="ph" type="button" aria-label="Photo – ${esc(ph.room)}" style="background-image:url('/api/photos/${ph.id}')" onclick="openViewer(${ph.id})"><span>${esc(ph.room)}</span></button>`).join('');
+  const photos = (p.photos || []).filter((ph) => !state.photoRoom || state.photoRoom === 'All' || ph.room === state.photoRoom).map((ph) => `<button class="ph" type="button" aria-label="Photo – ${esc(ph.room)}" style="background-image:url('/api/photos/${ph.id}')" onclick="openViewer(${ph.id})"><span>${esc(ph.room)}</span></button>`).join('');
 
   const notes = (p.notes || []).map((n) => `<div class="note">
       <div class="note-meta"><span class="note-room">${esc(n.room)}</span><span style="color:var(--muted)">${esc(fmtDay(n.createdAt))} ${esc(fmtTime(n.createdAt))} · <button class="linkbtn" style="padding:0;min-height:0;font-size:12px;color:var(--muted)" type="button" onclick="deleteNote(${n.id})" aria-label="Delete note">Delete</button></span></div>
@@ -547,9 +557,9 @@ function renderProperty() {
       ${tab === 'ratings' ? ratingsHtml(p) : `
       <div class="panel">
         <div class="panel-head"><span class="section-label">Photos${p.photos.length ? ' · ' + p.photos.length : ''}</span></div>
-        <div class="row"><label for="photo-room" class="sr">Room for next photo</label><select id="photo-room" class="field">${roomOptions(state.lastRoom || 'General')}</select></div>
+        ${roomChipsHtml(p)}
         <div class="grid">
-          <button class="ph-add" type="button" id="photo-add" onclick="document.getElementById('photo-input').click()">${CAMERA}Add photo</button>
+          <button class="ph-add" type="button" id="photo-add" onclick="document.getElementById('photo-input').click()">${CAMERA}${state.photoRoom && state.photoRoom !== 'All' ? `Add to<br>${esc(state.photoRoom)}` : 'Add photo'}</button>
           ${photos}
         </div>
       </div>
@@ -557,7 +567,7 @@ function renderProperty() {
       <div class="panel">
         <span class="section-label">Notes${p.notes.length ? ' · ' + p.notes.length : ''}</span>
         <div class="composer">
-          <div class="row"><label for="note-room" class="sr">Room</label><select id="note-room" class="field">${roomOptions(state.lastRoom || 'General')}</select></div>
+          <div class="row"><label for="note-room" class="sr">Room</label><select id="note-room" class="field">${roomOptions(state.photoRoom && state.photoRoom !== 'All' ? state.photoRoom : (state.lastRoom || 'General'))}</select></div>
           <label for="note-body" class="sr">Note</label>
           <textarea id="note-body" class="field" placeholder="What did you notice?"></textarea>
           <button class="small-btn" type="button" id="note-save" onclick="saveNote()">Save note</button>
@@ -937,10 +947,44 @@ function resizeImage(file, max = 1600, quality = 0.8) {
     img.src = url;
   });
 }
+// Room chips: filter the photo grid, and new photos go into the selected room.
+function roomChipsHtml(p) {
+  const counts = {};
+  (p.photos || []).forEach((ph) => { counts[ph.room] = (counts[ph.room] || 0) + 1; });
+  const sel = state.photoRoom || 'All';
+  const rooms = state.rooms.filter((r) => counts[r] || r === sel);
+  const chip = (r, label) => `<button type="button" class="chip ${sel === r ? 'on' : ''}" aria-pressed="${sel === r}" onclick="setPhotoRoom(${r === 'All' ? "'All'" : state.rooms.indexOf(r)})">${label}</button>`;
+  return `<div class="chips" role="group" aria-label="Filter photos by room">
+    ${chip('All', `All <span>${(p.photos || []).length}</span>`)}
+    ${rooms.map((r) => chip(r, `${esc(r)} <span>${counts[r] || 0}</span>`)).join('')}
+    <button type="button" class="chip add" onclick="pickRoom().then((r) => { if (r) { state.photoRoom = r; renderProperty(); } })">+ Room</button>
+  </div>`;
+}
+function setPhotoRoom(idx) { state.photoRoom = idx === 'All' ? 'All' : state.rooms[idx]; renderProperty(); }
+
+// Small sheet listing rooms; resolves with the chosen room (or null if cancelled).
+function pickRoom(title) {
+  return new Promise((resolve) => {
+    const bg = document.createElement('div');
+    bg.className = 'room-sheet-bg';
+    bg.innerHTML = `<div class="room-sheet" role="dialog" aria-modal="true" aria-label="${esc(title || 'Choose a room')}">
+      <div class="panel-head"><strong>${esc(title || 'Choose a room')}</strong><button type="button" class="linkbtn" data-r="">Cancel</button></div>
+      <div class="room-grid">${state.rooms.map((r) => `<button type="button" class="chip" data-r="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+    </div>`;
+    bg.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-r]');
+      if (b || e.target === bg) { bg.remove(); resolve(b ? b.dataset.r || null : null); }
+    });
+    document.body.appendChild(bg);
+  });
+}
+
 async function onPhotoPicked(input) {
   const file = input.files && input.files[0]; input.value = '';
   if (!file || !state.current) return;
-  const room = document.getElementById('photo-room').value; state.lastRoom = room;
+  let room = state.photoRoom && state.photoRoom !== 'All' ? state.photoRoom : await pickRoom('Which room is this?');
+  if (!room) return;
+  state.lastRoom = room;
   const add = document.getElementById('photo-add'); add.disabled = true; add.textContent = 'Saving…';
   try {
     const blob = await resizeImage(file);
