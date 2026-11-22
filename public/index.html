@@ -176,6 +176,39 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .room-sheet { width: 100%; max-width: 520px; background: var(--surface); border-radius: 18px 18px 0 0; padding: 16px 14px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 12px; }
 .room-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .room-grid .chip { min-height: 44px; }
+body.has-nav .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+.nav-icon { position: relative; display: inline-flex; }
+.nav-badge { position: absolute; top: -6px; left: 16px; font-size: 10px; font-weight: 700; line-height: 1; padding: 3px 5px; border-radius: 9px; white-space: nowrap; }
+.nav-badge.soft { background: var(--accent-soft); color: #0F5F58; }
+.nav-badge.plus { background: var(--accent); color: #fff; }
+.nav-badge.new { background: #E11D48; color: #fff; min-width: 18px; text-align: center; box-shadow: 0 0 0 2px #fff; }
+.bottom-nav a.alert { color: #E11D48; font-weight: 700; }
+.gift-progress { background: var(--ink); color: #fff; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.gp-num { font-family: 'Space Grotesk', sans-serif; font-size: 30px; font-weight: 700; }
+.gp-num small { font-size: 18px; color: #D1D5DB; }
+.gp-left { font-size: 13px; color: #D1D5DB; }
+.gp-text { font-size: 14px; color: #E5E7EB; line-height: 1.4; }
+.gdots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; width: 100%; }
+.gdot { height: 10px; border-radius: 5px; background: #374151; }
+.gdot.on { background: #2DD4BF; }
+.gdots.light .gdot { background: rgba(255,255,255,0.3); }
+.gdots.light .gdot.on { background: #fff; }
+.gift-hero { background: var(--accent); color: #fff; border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
+.gift-hero strong { font-family: 'Space Grotesk', sans-serif; font-size: 26px; }
+.gift-hero span { font-size: 14px; color: #CCFBF1; line-height: 1.4; }
+.gift-title { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; margin-top: 2px; }
+.code-box { border: 2px dashed var(--accent); border-radius: 12px; background: var(--accent-soft); padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.code { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: 0.08em; color: #0F5F58; }
+.lock-tile { width: 56px; height: 56px; flex-shrink: 0; border-radius: 14px; background: #E5E7EB; display: flex; align-items: center; justify-content: center; }
+.step { width: 24px; height: 24px; flex-shrink: 0; border-radius: 12px; background: var(--accent-soft); color: #0F5F58; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.hist { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 52px; border-top: 1px solid #EEF0F3; text-decoration: none; color: var(--ink); }
+.hist b { display: block; font-size: 14px; }
+.hist small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.gpill { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; flex-shrink: 0; background: #F3F4F6; color: var(--body); }
+.gpill.ok { background: #D1FAE5; color: #065F46; }
+.gpill.no { background: #FEF2F2; color: #991B1B; }
+.point-banner { border-radius: 12px; background: var(--ink); color: #fff; padding: 12px; display: flex; gap: 12px; align-items: center; text-decoration: none; }
+.point-banner .plus1 { width: 44px; height: 44px; flex-shrink: 0; border-radius: 22px; background: #2DD4BF; color: var(--ink); display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; }
 .signout { background: none; border: 0; color: var(--muted); font-size: 13px; padding: 8px 0; }
 </style>
 </head>
@@ -242,6 +275,12 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
   <div id="compare-body" style="padding:0 12px 24px;display:flex;flex-direction:column;gap:12px"></div>
 </section>
 
+<!-- GIFTS -->
+<section id="gifts-screen" class="screen" aria-label="Gifts">
+  <div class="top"><div><h1>Gifts</h1><div class="sub">Earn a point for each viewing the agent confirms</div></div></div>
+  <div id="gifts-body" style="padding:0 12px 24px;display:flex;flex-direction:column;gap:12px"></div>
+</section>
+
 <!-- PROPERTY HUB -->
 <section id="property-screen" class="screen" aria-label="Property"></section>
 
@@ -251,6 +290,7 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 <nav class="bottom-nav" id="bottom-nav" aria-label="Main" hidden>
   <a href="#" id="nav-list"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>Properties</a>
   <a href="#/compare" id="nav-compare"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>Compare</a>
+  <a href="#/gifts" id="nav-gifts"><span class="nav-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M12 8v13"/><path d="M3 12.5h18"/><path d="M12 8C10 4 6.5 4 6.5 6.2S9.5 8 12 8z"/><path d="M12 8c2-4 5.5-4 5.5-1.8S14.5 8 12 8z"/></svg><span class="nav-badge" id="gift-badge" hidden></span></span>Gifts</a>
 </nav>
 
 </div>
@@ -302,9 +342,10 @@ async function api(url, opts = {}) {
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
   const nav = document.getElementById('bottom-nav');
-  nav.hidden = !(id === 'list-screen' || id === 'compare-screen');
+  nav.hidden = !(id === 'list-screen' || id === 'compare-screen' || id === 'gifts-screen');
   document.getElementById('nav-list').classList.toggle('on', id === 'list-screen');
   document.getElementById('nav-compare').classList.toggle('on', id === 'compare-screen');
+  document.getElementById('nav-gifts').classList.toggle('on', id === 'gifts-screen');
   document.body.classList.toggle('has-nav', !nav.hidden);
   window.scrollTo(0, 0);
 }
@@ -315,6 +356,7 @@ function route() {
   if (f) openFeedback(Number(f[1]));
   else if (m) openProperty(Number(m[1]));
   else if (location.hash === '#/compare') { show('compare-screen'); renderCompare(); }
+  else if (location.hash === '#/gifts') { show('gifts-screen'); openGifts(); }
   else { show('list-screen'); render(); }
 }
 window.addEventListener('hashchange', route);
@@ -361,7 +403,86 @@ async function loadProperties() {
   const d = await api('/api/properties');
   state.properties = d.properties || []; state.lastSync = d.lastSync;
   if (d.categories) state.categories = d.categories;
+  if (d.gifts) {
+    const before = state.gifts;
+    state.gifts = d.gifts;
+    updateGiftBadge();
+    // Tell them when a new point lands (once per change, not on every load).
+    if (before && d.gifts.points > before.points) {
+      toast(d.gifts.unlocked && !before.unlocked ? 'Gift unlocked! 10% off your move – see Gifts' : '+1 point – an agent confirmed your visit');
+    } else if (!before && d.gifts.newPoints) {
+      toast(d.gifts.giftNew ? 'Gift unlocked! 10% off your move – see Gifts' : `+${d.gifts.newPoints} point${d.gifts.newPoints > 1 ? 's' : ''} – agents confirmed your visits`);
+    }
+  }
   if (document.getElementById('compare-screen').classList.contains('active')) renderCompare();
+}
+
+// ── Gifts ──────────────────────────────────────────────────────────────────
+function updateGiftBadge() {
+  const g = state.gifts, b = document.getElementById('gift-badge'), nav = document.getElementById('nav-gifts');
+  if (!g || !b) return;
+  b.className = 'nav-badge'; nav.classList.remove('alert');
+  if (g.giftNew) { b.textContent = '1'; b.classList.add('new'); nav.classList.add('alert'); b.hidden = false; nav.setAttribute('aria-label', 'Gifts – gift unlocked'); }
+  else if (g.newPoints) { b.textContent = '+' + g.newPoints; b.classList.add('plus'); b.hidden = false; nav.setAttribute('aria-label', `Gifts – ${g.newPoints} new point${g.newPoints > 1 ? 's' : ''}`); }
+  else if (!g.unlocked && g.points) { b.textContent = `${g.points}/${g.goal}`; b.classList.add('soft'); b.hidden = false; nav.setAttribute('aria-label', `Gifts – ${g.points} of ${g.goal} points`); }
+  else { b.hidden = true; nav.setAttribute('aria-label', 'Gifts'); }
+}
+async function openGifts() {
+  const el = document.getElementById('gifts-body');
+  if (!state.giftData) el.innerHTML = '<span class="muted">Loading…</span>';
+  try {
+    state.giftData = await api('/api/gifts');
+    renderGifts();
+    await api('/api/gifts/seen', { method: 'POST' });
+    if (state.gifts) { state.gifts.newPoints = 0; state.gifts.giftNew = false; updateGiftBadge(); }
+  } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderGifts() {
+  const g = state.giftData, el = document.getElementById('gifts-body');
+  const dots = Array.from({ length: g.goal }, (_, i) => `<span class="gdot ${i < g.points ? 'on' : ''}"></span>`).join('');
+  const left = Math.max(0, g.goal - g.points);
+  const GIFT_SVG = (c, w) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M12 8v13"/><path d="M3 12.5h18"/><path d="M12 8C10 4 6.5 4 6.5 6.2S9.5 8 12 8z"/><path d="M12 8c2-4 5.5-4 5.5-1.8S14.5 8 12 8z"/></svg>`;
+
+  const progress = g.unlocked
+    ? `<div class="gift-hero">${GIFT_SVG('#fff', 44)}<strong>Gift unlocked!</strong><span>${g.points} agents confirmed your viewings. Thanks for sharing your feedback.</span><div class="gdots light">${dots}</div></div>`
+    : `<div class="gift-progress">
+        <div class="row" style="justify-content:space-between;align-items:baseline"><span class="gp-num">${g.points} <small>of ${g.goal} points</small></span><span class="gp-left">${left} to go</span></div>
+        <div class="gdots">${dots}</div>
+        <span class="gp-text">${left === 1 ? 'One more confirmed viewing' : `${left} more confirmed viewings`} unlocks ${esc(g.gift.title.toLowerCase())}.</span>
+      </div>`;
+
+  const card = g.unlocked
+    ? `<div class="panel" style="gap:12px">
+        <div><span class="section-label">${esc(g.gift.partner)}</span><div class="gift-title">${esc(g.gift.title)}</div></div>
+        <div class="code-box"><div><span class="muted" style="font-size:11px">Your code</span><div class="code">${esc(g.gift.code)}</div></div>
+          <button class="small-btn" type="button" onclick="copyGiftCode()">Copy</button></div>
+        <a class="btn" href="${esc(g.gift.url)}" target="_blank" rel="noopener" style="background:var(--ink);text-decoration:none">Get a moving quote ›</a>
+        <span class="muted" style="font-size:12px">${esc(g.gift.terms)}</span>
+      </div>`
+    : `<div class="panel" style="flex-direction:row;align-items:center;gap:12px">
+        <div class="lock-tile"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <div style="display:flex;flex-direction:column;gap:2px"><span class="section-label">${esc(g.gift.partner)}</span><span style="font-size:17px;font-weight:700">${esc(g.gift.title)}</span><span class="muted" style="font-size:13px">Unlocks at ${g.goal} points</span></div>
+      </div>`;
+
+  const how = g.unlocked ? `<div class="panel" style="flex-direction:row;align-items:center;gap:10px"><span style="font-size:14px">Keep checking in – more gifts are on the way.</span></div>`
+    : `<div class="panel"><span class="section-label">How to earn a point</span>
+        ${['Tap “I’m here” at the viewing', 'Share feedback with the agent', 'Agent confirms you attended = +1 point'].map((t, i) => `<div class="row" style="gap:10px;font-size:14px"><span class="step">${i + 1}</span>${t}</div>`).join('')}
+        <span class="muted" style="font-size:12px">One point per property.</span>
+      </div>`;
+
+  const pill = { confirmed: ['+1', 'ok'], pending: ['Pending', ''], declined: ['No point', 'no'] };
+  const status = (h) => h.state === 'confirmed' ? `Agent confirmed · ${fmtDay(h.confirmedAt)}` : h.state === 'declined' ? 'Agent didn’t confirm attendance' : 'Feedback shared · waiting for agent';
+  const history = g.history.length
+    ? `<div class="panel" style="padding:6px 12px"><span class="section-label" style="padding:8px 0 4px">Your points</span>
+        ${g.history.map((h) => `<a class="hist" href="#/p/${h.listingId}"><span style="min-width:0"><b>${esc(shortAddress({ address: h.address }))}</b><small>${esc(status(h))}</small></span><span class="gpill ${pill[h.state][1]}">${pill[h.state][0]}</span></a>`).join('')}
+      </div>`
+    : `<div class="empty">No points yet. Share feedback after your next viewing – when the agent confirms you were there, you earn a point.</div>`;
+
+  el.innerHTML = progress + card + how + history;
+}
+async function copyGiftCode() {
+  const code = state.giftData && state.giftData.gift.code;
+  try { await navigator.clipboard.writeText(code); toast('Code copied'); } catch (e) { prompt('Your code:', code); }
 }
 
 // ── Compare ────────────────────────────────────────────────────────────────
@@ -433,7 +554,7 @@ function cardHtml(p) {
   const oh = nextOpenHome(p), c = p.counts || {};
   let when, cls = '';
   const viewed = !!c.lastVisit;
-  if (viewed) when = `${fmtDate(c.lastVisit)}${c.notes ? ` · ${c.notes} note${c.notes > 1 ? 's' : ''}` : ''}${c.photos ? ` · ${c.photos} photo${c.photos > 1 ? 's' : ''}` : ''}`;
+  if (viewed) when = `${fmtDate(c.lastVisit)}${p.confirmed ? ' · Agent confirmed · +1 point' : ''}${c.notes ? ` · ${c.notes} note${c.notes > 1 ? 's' : ''}` : ''}${c.photos ? ` · ${c.photos} photo${c.photos > 1 ? 's' : ''}` : ''}`;
   else if (oh) when = `${ohLabel(p)} · ${fmtDay(oh.start)} · ${fmtTime(oh.start)}${oh.end ? '–' + fmtTime(oh.end) : ''}`;
   else { when = `No ${ohLabel(p).toLowerCase()} times listed`; cls = 'none'; }
   const thumb = p.photoUrl ? `style="background-image:url('${esc(p.photoUrl)}')"` : '';
@@ -701,7 +822,12 @@ function feedbackPanelHtml(p) {
   const opened = a.viewCount
     ? `<span class="act ok">✓ Opened by agent${a.viewCount > 1 ? ` ${a.viewCount} times` : ''} · last ${esc(fmtDay(a.lastViewedAt))} ${esc(fmtTime(a.lastViewedAt))}</span>`
     : `<span class="act">${a.sentVia && a.sentVia.length ? 'Sent – not opened yet' : 'Not sent yet'}</span>`;
-  const confirmed = f.confirmed === true ? `<span class="act ok">✓ Agent confirmed you attended</span>`
+  const g = state.gifts;
+  const confirmed = f.confirmed === true ? `<span class="act ok">✓ Agent confirmed you attended</span>
+      <a class="point-banner" href="#/gifts"><span class="plus1">+1</span>
+        <span style="display:flex;flex-direction:column;gap:2px;flex:1"><b style="font-size:15px">You earned a point</b>
+        <span style="font-size:13px;color:#D1D5DB">${g ? (g.unlocked ? 'Gift unlocked – 10% off your move' : `${g.points} of ${g.goal}${g.goal - g.points === 1 ? ' – one more unlocks 10% off moving' : ''}`) : ''}</span></span>
+        <span style="color:#5EEAD4;font-size:14px;font-weight:600">View ›</span></a>`
     : f.confirmed === false ? `<span class="act">Agent said you didn’t attend</span>` : '';
   return `<div class="panel">
     <div class="panel-head"><span class="section-label">Feedback to agent</span><span class="status-pill sent">Link active</span></div>

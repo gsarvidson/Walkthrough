@@ -122,6 +122,11 @@ ALTER TABLE feedback ADD COLUMN IF NOT EXISTS shared_at TIMESTAMPTZ;
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS confirmed BOOLEAN;
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
 
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS gifts_seen_points INTEGER;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS gift_seen BOOLEAN;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS gift_code TEXT;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS gift_unlocked_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS feedback_events (
   id          SERIAL PRIMARY KEY,
   feedback_id INTEGER NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
@@ -246,7 +251,9 @@ async function listProperties(userId) {
   const fb = await feedbackStatuses(userId);
   return rows.map((r) => {
     const p = rowToProperty(r);
-    p.feedback = fb[Number(r.listing_id)] || null;
+    const fs = fb[Number(r.listing_id)];
+    p.feedback = fs ? fs.status : null;
+    p.confirmed = fs ? fs.confirmed : false;
     p.counts = counts[p.listingId] || { notes: 0, photos: 0, visits: 0, lastVisit: null };
     const mine = ratings[p.listingId] || {};
     const scores = cats.map((c) => mine[c]).filter((s) => s > 0);
@@ -467,14 +474,50 @@ async function saveFeedback(userId, listingId, f) {
       JSON.stringify(f.includeNotes || []), JSON.stringify(f.includePhotos || [])]);
 }
 async function feedbackStatuses(userId) {
-  const { rows } = await pool.query('SELECT listing_id, status FROM feedback WHERE user_id = $1', [userId]);
+  const { rows } = await pool.query('SELECT listing_id, status, confirmed FROM feedback WHERE user_id = $1', [userId]);
   const out = {};
-  for (const r of rows) out[Number(r.listing_id)] = r.status;
+  for (const r of rows) out[Number(r.listing_id)] = { status: r.status, confirmed: r.confirmed === true };
   return out;
+}
+
+// ── gifts ────────────────────────────────────────────────────────────────────
+// One point per property: feedback is one row per property, so a confirmed row = one point.
+async function giftHistory(userId) {
+  const { rows } = await pool.query(
+    `SELECT listing_id, confirmed, confirmed_at, status, shared_at FROM feedback
+     WHERE user_id = $1 AND (shared_at IS NOT NULL OR confirmed IS NOT NULL)`, [userId]);
+  const props = await pool.query('SELECT listing_id, address, title FROM properties WHERE user_id = $1', [userId]);
+  const names = {};
+  for (const p of props.rows) names[Number(p.listing_id)] = p.address || p.title || '';
+  return rows.map((r) => ({
+    listingId: Number(r.listing_id),
+    address: names[Number(r.listing_id)] || '',
+    state: r.confirmed === true ? 'confirmed' : r.confirmed === false ? 'declined' : 'pending',
+    confirmedAt: iso(r.confirmed_at),
+    sharedAt: iso(r.shared_at)
+  })).sort((a, b) => (b.confirmedAt || b.sharedAt || '').localeCompare(a.confirmedAt || a.sharedAt || ''));
+}
+async function getGiftSettings(userId) {
+  const { rows } = await pool.query(
+    'SELECT gifts_seen_points, gift_seen, gift_code, gift_unlocked_at FROM user_settings WHERE user_id = $1', [userId]);
+  const r = rows[0] || {};
+  return { seenPoints: Number(r.gifts_seen_points || 0), giftSeen: !!r.gift_seen, code: r.gift_code || null, unlockedAt: iso(r.gift_unlocked_at) };
+}
+async function ensureSettingsRow(userId) {
+  await pool.query('INSERT INTO user_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [userId]);
+}
+async function setGiftUnlocked(userId, code) {
+  await ensureSettingsRow(userId);
+  await pool.query('UPDATE user_settings SET gift_code = $2, gift_unlocked_at = now() WHERE user_id = $1 AND gift_code IS NULL', [userId, code]);
+}
+async function markGiftsSeen(userId, points, giftSeen) {
+  await ensureSettingsRow(userId);
+  await pool.query('UPDATE user_settings SET gifts_seen_points = $2, gift_seen = $3 WHERE user_id = $1', [userId, points, giftSeen]);
 }
 
 module.exports = {
   getFeedback, lastContact, saveFeedback, feedbackStatuses,
+  giftHistory, getGiftSettings, setGiftUnlocked, markGiftsSeen,
   getFeedbackByToken, shareFeedback, unshareFeedback, logFeedbackEvent, logFeedbackEventById, confirmAttendance, feedbackActivity,
   init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
   addVisit, deleteVisit, addNote, deleteNote, updateNote, addPhoto, getPhoto, deletePhoto, setPhotoRoom,

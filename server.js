@@ -131,7 +131,8 @@ app.get('/api/properties', requireAuth, async (req, res) => {
     const properties = await db.listProperties(req.session.userId);
     const lastSync = await db.lastSync(req.session.userId);
     const categories = await db.getCategories(req.session.userId);
-    res.json({ properties, lastSync, categories });
+    const g = await giftSummary(req.session.userId);
+    res.json({ properties, lastSync, categories, gifts: { points: g.points, goal: g.goal, unlocked: g.unlocked, newPoints: g.newPoints, giftNew: g.giftNew } });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Could not load your properties.' });
@@ -274,6 +275,35 @@ app.post('/api/properties/:listingId/feedback/unshare', requireAuth, wrap(async 
 app.post('/api/properties/:listingId/feedback/sent', requireAuth, wrap(async (req, res) => {
   const via = ['email', 'share', 'copy'].includes(req.body && req.body.via) ? req.body.via : 'other';
   await db.logFeedbackEvent(req.session.userId, listingParam(req), 'sent', via);
+  res.json({ success: true });
+}));
+
+// ── GIFTS ────────────────────────────────────────────────────────────────────
+const gifts = require('./gifts');
+
+async function giftSummary(uid) {
+  const history = await db.giftHistory(uid);
+  const points = history.filter((h) => h.state === 'confirmed').length;
+  let s = await db.getGiftSettings(uid);
+  const unlocked = points >= gifts.GOAL;
+  if (unlocked && !s.code) { await db.setGiftUnlocked(uid, gifts.makeCode(crypto.randomBytes)); s = await db.getGiftSettings(uid); }
+  return {
+    points, goal: gifts.GOAL, unlocked,
+    newPoints: Math.max(0, points - s.seenPoints),
+    giftNew: unlocked && !s.giftSeen,
+    history,
+    gift: { ...gifts.GIFT, code: unlocked ? s.code : null, unlockedAt: s.unlockedAt }
+  };
+}
+
+app.get('/api/gifts', requireAuth, wrap(async (req, res) => {
+  res.json(await giftSummary(req.session.userId));
+}));
+
+// Opening the Gifts tab clears the "+1" / unlocked badges.
+app.post('/api/gifts/seen', requireAuth, wrap(async (req, res) => {
+  const g = await giftSummary(req.session.userId);
+  await db.markGiftsSeen(req.session.userId, g.points, g.unlocked);
   res.json({ success: true });
 }));
 
