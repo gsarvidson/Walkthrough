@@ -136,7 +136,7 @@ textarea.field { min-height: 72px; resize: vertical; line-height: 1.45; }
 .score-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #FFE4E6; color: #9F1239; }
 .card.viewed .when strong { font-weight: 700; }
 .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; max-width: 520px; margin: 0 auto; display: flex; justify-content: space-around; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
-.bottom-nav[hidden] { display: none; }
+[hidden] { display: none !important; }
 .bottom-nav a { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 88px; min-height: 48px; justify-content: center; text-decoration: none; color: var(--muted); font-size: 12px; font-weight: 500; }
 .bottom-nav a.on { color: var(--accent); font-weight: 700; }
 body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
@@ -507,7 +507,16 @@ function setCompareType(t) {
   renderCompare();
 }
 function renderCompare() {
-  const type = state.compareType || 'For sale';
+  // Only show For sale / For rent when viewed homes of both types exist; otherwise use the one there is.
+  const viewedAll = state.properties.filter((p) => p.counts && p.counts.visits);
+  const types = ['For sale', 'For rent'].filter((t) => viewedAll.some((p) => p.listingType === t));
+  if (!types.includes(state.compareType)) state.compareType = types[0] || 'For sale';
+  document.querySelectorAll('[data-ctype]').forEach((b) => {
+    b.hidden = types.length < 2;
+    b.setAttribute('aria-pressed', String(b.dataset.ctype === state.compareType));
+  });
+  document.querySelector('[data-ctype]').parentNode.hidden = types.length < 2;
+  const type = state.compareType;
   const el = document.getElementById('compare-body');
   const viewed = state.properties.filter((p) => p.counts && p.counts.visits && p.listingType === type)
     .sort((a, b) => (b.average || 0) - (a.average || 0));
@@ -589,6 +598,14 @@ function cardHtml(p) {
 function render() {
   const n = state.properties.length;
   document.getElementById('sync-status').textContent = `${n} ${n === 1 ? 'property' : 'properties'} from your watchlist · synced ${ago(state.lastSync)}`;
+  // Only offer For sale / For rent filters when the watchlist has that type.
+  const has = { sale: state.properties.some((p) => p.listingType === 'For sale'), rent: state.properties.some((p) => p.listingType === 'For rent') };
+  const showType = has.sale && has.rent;
+  ['sale', 'rent'].forEach((t) => { document.querySelector(`[data-filter="${t}"]`).hidden = !showType; });
+  if ((state.filter === 'sale' || state.filter === 'rent') && !showType) {
+    state.filter = 'all';
+    document.querySelectorAll('[data-filter]').forEach((t) => t.setAttribute('aria-pressed', 'false'));
+  }
   let list = state.properties.slice();
   if (state.filter === 'sale') list = list.filter((p) => p.listingType === 'For sale');
   if (state.filter === 'rent') list = list.filter((p) => p.listingType === 'For rent');
