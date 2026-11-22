@@ -384,6 +384,13 @@ app.post('/api/properties/:listingId/notes', requireAuth, wrap(async (req, res) 
   res.json({ id });
 }));
 
+app.patch('/api/notes/:id', requireAuth, wrap(async (req, res) => {
+  const body = String((req.body && req.body.body) || '').trim().slice(0, 4000);
+  if (!body) return res.status(400).json({ error: 'Note is empty' });
+  await db.updateNote(req.session.userId, Number(req.params.id), cleanRoom(req.body.room), body);
+  res.json({ success: true });
+}));
+
 app.delete('/api/notes/:id', requireAuth, wrap(async (req, res) => {
   await db.deleteNote(req.session.userId, Number(req.params.id));
   res.json({ success: true });

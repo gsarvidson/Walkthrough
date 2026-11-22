@@ -289,6 +289,9 @@ async function addNote(userId, listingId, room, body) {
     [userId, listingId, room, body]);
   return rows[0].id;
 }
+async function updateNote(userId, id, room, body) {
+  await pool.query('UPDATE notes SET room = $3, body = $4 WHERE user_id = $1 AND id = $2', [userId, id, room, body]);
+}
 async function deleteNote(userId, id) {
   await pool.query('DELETE FROM notes WHERE user_id = $1 AND id = $2', [userId, id]);
 }
@@ -474,7 +477,7 @@ module.exports = {
   getFeedback, lastContact, saveFeedback, feedbackStatuses,
   getFeedbackByToken, shareFeedback, unshareFeedback, logFeedbackEvent, logFeedbackEventById, confirmAttendance, feedbackActivity,
   init, sessionStore, upsertUser, lastSync, saveSync, listProperties, getProperty,
-  addVisit, deleteVisit, addNote, deleteNote, addPhoto, getPhoto, deletePhoto, setPhotoRoom,
+  addVisit, deleteVisit, addNote, deleteNote, updateNote, addPhoto, getPhoto, deletePhoto, setPhotoRoom,
   getCategories, setCategories, renameCategory, setRating, getRatings, allRatings,
   getChecklist, saveChecklistItem, deleteChecklistItem
 };

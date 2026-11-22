@@ -162,6 +162,10 @@ body.has-nav .wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .ph.pick.on { opacity: 1; outline-color: var(--accent); }
 .ph.pick input { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .status-pill.sent { background: #D1FAE5; color: #065F46; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.linkbtn.mini { padding: 0; min-height: 28px; font-size: 13px; }
+.note.editing { gap: 8px; }
+.room-head { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; padding: 0; min-height: 36px; color: var(--ink); text-align: left; }
 .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
 .chip { flex-shrink: 0; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid #D1D5DB; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 500; white-space: nowrap; }
 .chip span { color: var(--muted); font-weight: 400; margin-left: 2px; }
@@ -512,11 +516,6 @@ function renderProperty() {
   const visitsHtml = earlier.length
     ? `<div class="panel"><span class="section-label">Your visits</span>${earlier.map((v) => `<div class="oh"><span>${esc(fmtDate(v.checkedInAt))} · ${esc(fmtTime(v.checkedInAt))}</span><span class="muted">${esc(v.kind)}</span></div>`).join('')}</div>` : '';
 
-  const photos = (p.photos || []).filter((ph) => !state.photoRoom || state.photoRoom === 'All' || ph.room === state.photoRoom).map((ph) => `<button class="ph" type="button" aria-label="Photo – ${esc(ph.room)}" style="background-image:url('/api/photos/${ph.id}')" onclick="openViewer(${ph.id})"><span>${esc(ph.room)}</span></button>`).join('');
-
-  const notes = (p.notes || []).map((n) => `<div class="note">
-      <div class="note-meta"><span class="note-room">${esc(n.room)}</span><span style="color:var(--muted)">${esc(fmtDay(n.createdAt))} ${esc(fmtTime(n.createdAt))} · <button class="linkbtn" style="padding:0;min-height:0;font-size:12px;color:var(--muted)" type="button" onclick="deleteNote(${n.id})" aria-label="Delete note">Delete</button></span></div>
-      <div class="note-body">${esc(n.body)}</div></div>`).join('');
 
   const agent = p.agent && (p.agent.name || p.agent.agency)
     ? `<div class="panel"><span class="section-label">Agent</span>
@@ -554,26 +553,7 @@ function renderProperty() {
       <div class="capture ${hasVisit ? '' : 'locked'}">
       ${hasVisit ? '' : `<div class="lock-hint"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Tap “I’m here” when you arrive to start ${tab === 'ratings' ? 'rating this home' : 'adding photos and notes'}.</div>`}
       <div ${hasVisit ? '' : 'inert aria-disabled="true"'} style="display:flex;flex-direction:column;gap:14px">
-      ${tab === 'ratings' ? ratingsHtml(p) : `
-      <div class="panel">
-        <div class="panel-head"><span class="section-label">Photos${p.photos.length ? ' · ' + p.photos.length : ''}</span></div>
-        ${roomChipsHtml(p)}
-        <div class="grid">
-          <button class="ph-add" type="button" id="photo-add" onclick="document.getElementById('photo-input').click()">${CAMERA}${state.photoRoom && state.photoRoom !== 'All' ? `Add to<br>${esc(state.photoRoom)}` : 'Add photo'}</button>
-          ${photos}
-        </div>
-      </div>
-
-      <div class="panel">
-        <span class="section-label">Notes${p.notes.length ? ' · ' + p.notes.length : ''}</span>
-        <div class="composer">
-          <div class="row"><label for="note-room" class="sr">Room</label><select id="note-room" class="field">${roomOptions(state.photoRoom && state.photoRoom !== 'All' ? state.photoRoom : (state.lastRoom || 'General'))}</select></div>
-          <label for="note-body" class="sr">Note</label>
-          <textarea id="note-body" class="field" placeholder="What did you notice?"></textarea>
-          <button class="small-btn" type="button" id="note-save" onclick="saveNote()">Save note</button>
-        </div>
-        ${notes}
-      </div>`}
+      ${tab === 'ratings' ? ratingsHtml(p) : captureHtml(p)}
       </div>
       </div>`}
 
@@ -919,7 +899,7 @@ async function undoCheckin(id) {
 async function saveNote() {
   const body = document.getElementById('note-body').value.trim();
   if (!body) return toast('Write a note first');
-  const room = document.getElementById('note-room').value; state.lastRoom = room;
+  const room = state.photoRoom && state.photoRoom !== 'All' ? state.photoRoom : 'General'; state.lastRoom = room;
   const btn = document.getElementById('note-save'); btn.disabled = true;
   try {
     await api(`/api/properties/${state.current.listingId}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room, body }) });
@@ -928,7 +908,7 @@ async function saveNote() {
 }
 async function deleteNote(id) {
   if (!confirm('Delete this note?')) return;
-  try { await api('/api/notes/' + id, { method: 'DELETE' }); await refreshProperty(); } catch (e) { toast(e.message); }
+  try { await api('/api/notes/' + id, { method: 'DELETE' }); state.editNote = null; await refreshProperty(); } catch (e) { toast(e.message); }
 }
 
 // Photos: resize on the phone before upload so they're quick to send and store.
@@ -947,20 +927,106 @@ function resizeImage(file, max = 1600, quality = 0.8) {
     img.src = url;
   });
 }
-// Room chips: filter the photo grid, and new photos go into the selected room.
-function roomChipsHtml(p) {
-  const counts = {};
-  (p.photos || []).forEach((ph) => { counts[ph.room] = (counts[ph.room] || 0) + 1; });
-  const sel = state.photoRoom || 'All';
-  const rooms = state.rooms.filter((r) => counts[r] || r === sel);
-  const chip = (r, label) => `<button type="button" class="chip ${sel === r ? 'on' : ''}" aria-pressed="${sel === r}" onclick="setPhotoRoom(${r === 'All' ? "'All'" : state.rooms.indexOf(r)})">${label}</button>`;
-  return `<div class="chips" role="group" aria-label="Filter photos by room">
-    ${chip('All', `All <span>${(p.photos || []).length}</span>`)}
-    ${rooms.map((r) => chip(r, `${esc(r)} <span>${counts[r] || 0}</span>`)).join('')}
-    <button type="button" class="chip add" onclick="pickRoom().then((r) => { if (r) { state.photoRoom = r; renderProperty(); } })">+ Room</button>
-  </div>`;
+// ── Photos & notes, organised by room ──────────────────────────────────────
+// One room bar controls both. "All" shows a room-by-room walkthrough.
+function roomOrder() { return [...state.rooms.filter((r) => r !== 'General'), 'General']; }
+function roomStats(p) {
+  const s = {};
+  const get = (r) => (s[r] = s[r] || { photos: [], notes: [] });
+  (p.photos || []).forEach((ph) => get(ph.room).photos.push(ph));
+  (p.notes || []).forEach((n) => get(n.room).notes.push(n));
+  return s;
 }
-function setPhotoRoom(idx) { state.photoRoom = idx === 'All' ? 'All' : state.rooms[idx]; renderProperty(); }
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+function photoTile(ph) {
+  return `<button class="ph" type="button" aria-label="Photo – ${esc(ph.room)}" style="background-image:url('/api/photos/${ph.id}')" onclick="openViewer(${ph.id})"></button>`;
+}
+function noteHtml(n) {
+  if (state.editNote === n.id) {
+    return `<div class="note editing">
+      <label class="sr" for="edit-note-body">Edit note</label>
+      <textarea id="edit-note-body" class="field">${esc(n.body)}</textarea>
+      <div class="row"><label class="sr" for="edit-note-room">Room</label><select id="edit-note-room" class="field" style="height:44px">${roomOptions(n.room)}</select></div>
+      <div class="row" style="justify-content:space-between">
+        <button class="linkbtn" type="button" style="color:#B91C1C" onclick="deleteNote(${n.id})">Delete</button>
+        <span class="row" style="gap:12px"><button class="linkbtn" type="button" style="color:var(--muted)" onclick="state.editNote=null;renderProperty()">Cancel</button>
+        <button class="small-btn" type="button" onclick="saveNoteEdit(${n.id})">Save</button></span>
+      </div></div>`;
+  }
+  const long = n.body.length > 140 || n.body.split('\n').length > 3;
+  return `<div class="note">
+    <div class="note-body clamp" id="nb-${n.id}">${esc(n.body)}</div>
+    <div class="note-meta"><span style="color:var(--muted)">${esc(fmtDay(n.createdAt))} ${esc(fmtTime(n.createdAt))}</span>
+      <span class="row" style="gap:14px">
+        ${long ? `<button class="linkbtn mini" type="button" onclick="this.textContent=document.getElementById('nb-${n.id}').classList.toggle('clamp')?'more':'less'">more</button>` : ''}
+        <button class="linkbtn mini" type="button" onclick="state.editNote=${n.id};renderProperty();setTimeout(()=>document.getElementById('edit-note-body').focus(),0)">Edit</button>
+      </span></div></div>`;
+}
+function captureHtml(p) {
+  const sel = state.photoRoom || 'All';
+  const stats = roomStats(p);
+  const total = (p.photos || []).length + (p.notes || []).length;
+  const used = roomOrder().filter((r) => stats[r] || r === sel);
+  const chip = (r, n) => `<button type="button" class="chip ${sel === r ? 'on' : ''}" aria-pressed="${sel === r}" onclick="setRoom(${r === 'All' ? "'All'" : state.rooms.indexOf(r)})">${esc(r)} <span>${n}</span></button>`;
+  const bar = `<div class="chips" role="group" aria-label="Rooms">
+    ${chip('All', total)}
+    ${used.map((r) => chip(r, stats[r] ? stats[r].photos.length + stats[r].notes.length : 0)).join('')}
+    <button type="button" class="chip add" onclick="pickRoom().then((r) => { if (r) setRoom(state.rooms.indexOf(r)); })">+ Room</button>
+  </div>`;
+
+  if (sel !== 'All') {
+    const s = stats[sel] || { photos: [], notes: [] };
+    return `${bar}
+    <div class="panel">
+      <div class="panel-head"><span style="font-size:17px;font-weight:700">${esc(sel)}</span><span class="muted" style="font-size:13px">${plural(s.photos.length, 'photo')} · ${plural(s.notes.length, 'note')}</span></div>
+      <div class="grid">
+        <button class="ph-add" type="button" id="photo-add" onclick="document.getElementById('photo-input').click()">${CAMERA}Add photo</button>
+        ${s.photos.map(photoTile).join('')}
+      </div>
+      ${s.notes.map(noteHtml).join('')}
+      <div class="composer" style="border-top:1px solid #EEF0F3;padding-top:12px">
+        <label for="note-body" class="sr">Note about the ${esc(sel)}</label>
+        <textarea id="note-body" class="field" placeholder="What did you notice in the ${esc(sel.toLowerCase())}?"></textarea>
+        <button class="small-btn" type="button" id="note-save" onclick="saveNote()">Save note</button>
+      </div>
+    </div>`;
+  }
+
+  const sections = roomOrder().filter((r) => stats[r]).map((r) => {
+    const s = stats[r];
+    return `<div class="panel">
+      <button class="room-head" type="button" onclick="setRoom(${state.rooms.indexOf(r)})">
+        <span style="font-size:17px;font-weight:700">${esc(r)}</span>
+        <span class="muted" style="font-size:13px">${[s.photos.length ? plural(s.photos.length, 'photo') : '', s.notes.length ? plural(s.notes.length, 'note') : ''].filter(Boolean).join(' · ')} ›</span>
+      </button>
+      ${s.photos.length ? `<div class="grid">${s.photos.map(photoTile).join('')}</div>` : ''}
+      ${s.notes.map(noteHtml).join('')}
+    </div>`;
+  }).join('');
+
+  return `${bar}
+    <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <button class="btn btn-outline" type="button" id="photo-add" onclick="document.getElementById('photo-input').click()">${CAMERA} Add photo</button>
+      <button class="btn btn-outline" type="button" onclick="addNoteFromAll()">+ Add note</button>
+    </div>
+    ${sections || `<div class="empty">Nothing captured yet.<br>Pick a room above, or add a photo or note and choose the room.</div>`}`;
+}
+function setRoom(idx) { state.photoRoom = idx === 'All' ? 'All' : state.rooms[idx]; state.editNote = null; renderProperty(); }
+async function addNoteFromAll() {
+  const r = await pickRoom('Which room is this note about?');
+  if (!r) return;
+  setRoom(state.rooms.indexOf(r));
+  setTimeout(() => { const el = document.getElementById('note-body'); if (el) { el.focus(); el.scrollIntoView({ block: 'center' }); } }, 0);
+}
+async function saveNoteEdit(id) {
+  const body = document.getElementById('edit-note-body').value.trim();
+  if (!body) return toast('Note is empty');
+  const room = document.getElementById('edit-note-room').value;
+  try {
+    await api('/api/notes/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body, room }) });
+    state.editNote = null; await refreshProperty(); toast('Note updated');
+  } catch (e) { toast(e.message); }
+}
 
 // Small sheet listing rooms; resolves with the chosen room (or null if cancelled).
 function pickRoom(title) {
